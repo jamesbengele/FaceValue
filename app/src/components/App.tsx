@@ -71,7 +71,13 @@ export default function App() {
     if (wallet.kind === "email" && pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
   }, [wallet.kind, pk, getFunds]);
 
-  useEffect(() => { setOrganizerMode(new URLSearchParams(window.location.search).get("organizer") === "1"); }, []);
+  // `?event=<address>` pins one event (other runs on this program also create events); env var is the default pin.
+  const [pinned, setPinned] = useState(EVENT_ADDRESS);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setOrganizerMode(q.get("organizer") === "1");
+    if (q.get("event")) setPinned(q.get("event")!);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -82,15 +88,16 @@ export default function App() {
       setLoadErr(e?.message ?? String(e));
     }
   }, [program]);
-  useEffect(() => { load(); }, [load]);
+  // Poll so other windows see new events, listings and sales without a reload.
+  useEffect(() => { load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load]);
 
   const ev = useMemo(() => {
     if (!events) return undefined;
     let list = events;
-    if (EVENT_ADDRESS) list = list.filter((e) => e.publicKey.toBase58() === EVENT_ADDRESS);
+    if (pinned) list = list.filter((e) => e.publicKey.toBase58() === pinned);
     else if (organizerMode) list = pk ? list.filter((e) => e.account.organizer.equals(pk)) : [];
     return [...list].sort((a, b) => b.account.eventId.cmp(a.account.eventId))[0];
-  }, [events, organizerMode, pk]);
+  }, [events, organizerMode, pk, pinned]);
 
   const evTickets = useMemo(
     () => (ev ? tickets.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId) : []),
@@ -204,6 +211,7 @@ export default function App() {
           <div className="space-y-3">
             <h2 className="text-2xl font-bold">{ev.account.name}</h2>
             <p className="text-xl">Face price <b>{face}</b> · {ev.account.sold} of {ev.account.maxSupply} sold</p>
+            {organizerMode && <p className="break-all text-base text-zinc-400">Event address (open the other windows with <code>?event=</code> this): {ev.publicKey.toBase58()}</p>}
             {!organizerMode && <button className={btn} disabled={busy || !pk} onClick={buyTicket}>Buy ticket · {face}</button>}
             {!pk && <p className="text-zinc-400">Connect a wallet to buy.</p>}
           </div>

@@ -68,7 +68,7 @@ Errors: `PriceAboveFace, SoldOut, NotOwner, NotOrganizer, NotListed, TicketUsed,
 Deployed: devnet `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`, built in Solana Playground (Anchor 0.29, old-format IDL, so no `ctx.bumps`; bumps come from `find_program_address`).
 
 ### Tests (TypeScript, run against devnet; mocha)
-Tests create their own mint, fund wallets by SOL transfer from the deployer, and never call `requestAirdrop`. RPC and wallet come from env. Same `declare_id!` locally and on devnet.
+Tests create their own mint, fund wallets by SOL transfer from the deployer, and never call `requestAirdrop`. RPC and wallet come from env. `declare_id!` is the ID Playground assigns on build; keep it in sync with the tests.
 1. create_event → Event matches inputs (incl. mint, treasury, royalty)
 2. A buys → A owns, treasury +face, A token −face, `sold == 1`
 3. **A lists above face → `PriceAboveFace`**
@@ -107,5 +107,5 @@ Per-wallet limits, cap above face, event list page, multiple events.
 ## 10. Repo layout
 ```
 SPEC.md  README.md  PROMPTS.md  docs/{DEMO,PITCH}.md
-program/  src/lib.rs  tests/  Cargo.toml     idl/facevalue.json     app/
+program/  src/lib.rs  tests/  package.json     idl/facevalue.json     app/   (no Cargo.toml: built in Playground)
 ```
