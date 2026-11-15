@@ -1,10 +1,6 @@
 "use client";
-import { useMemo } from "react";
 import { Buffer } from "buffer";
-import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import "@solana/wallet-adapter-react-ui/styles.css";
+import { ConnectionProvider } from "@solana/wallet-adapter-react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { defaultSolanaRpcsPlugin } from "@privy-io/react-auth/solana";
 import { RPC_URL } from "@/lib/config";
@@ -15,25 +11,25 @@ const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 if (typeof window !== "undefined") (window as any).Buffer ??= Buffer;
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
-  const tree = (
-    <ConnectionProvider endpoint={RPC_URL}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
-  );
-  if (!PRIVY_APP_ID) return tree; // Phantom only, exactly as before
+  if (!PRIVY_APP_ID)
+    return (
+      <main className="mx-auto max-w-3xl px-5 py-10">
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+          <h1 className="text-2xl font-bold">Email sign-in isn&apos;t configured</h1>
+          <p className="mt-2 text-zinc-400">Set NEXT_PUBLIC_PRIVY_APP_ID in app/.env.local and restart.</p>
+        </section>
+      </main>
+    );
   return (
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        loginMethods: ["wallet", "email"],
+        loginMethods: ["email"],
         embeddedWallets: { solana: { createOnLogin: "all-users" }, showWalletUIs: false },
         plugins: [defaultSolanaRpcsPlugin()],
       }}
     >
-      {tree}
+      <ConnectionProvider endpoint={RPC_URL}>{children}</ConnectionProvider>
     </PrivyProvider>
   );
 }
