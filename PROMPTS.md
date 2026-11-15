@@ -14,3 +14,8 @@ Outcome: app builds. Review found one bug: `\b` inside a template-literal RegExp
 
 ## 3. Rotating gate code (same subagent, resumed)
 Brief: SPEC §7: gate.ts pure functions, signMessage in the wallet seam, holder QR/code with 30 s rotation, organizer gate (paste + BarcodeDetector), onchain re-fetch before check_in, node:assert tests. Outcome: build and `test:gate` pass; reviewed gate.ts and Gate.tsx by reading, no defects found. Phantom signMessage and camera unverified.
+
+## Verification log
+- Program deployed from Playground wallet to devnet (program id 2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G, 314,448 bytes). Public-RPC rate limits made the upload take about 25 min.
+- `mocha` suite against devnet: 10 passing (incl. test 3 PriceAboveFace, test 5 exact-ask split, test 10 rounding).
+- Demo event created on devnet: mint AsTAYEnPr1vnwSUY1UiZuuS2fSw7F6qN3BUHNUGtUQw1, event HGzK3Z4JAppGLFrKAEDM7g2gUKp7AXVyPLukqcsFr6iK.
