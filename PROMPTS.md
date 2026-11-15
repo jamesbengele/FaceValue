@@ -11,3 +11,6 @@ What broke / was corrected:
 ## 2. App core (Sonnet)
 Brief: Next.js app per SPEC §5 (Phantom, buy/list/cancel/resale, red banner via simulation only, organizer create/check-in, `account.all()` discovery, setup-demo and fund-wallet scripts). Explicit rule: no frontend price check. Outcome: see below once returned.
 Outcome: app builds. Review found one bug: `\b` inside a template-literal RegExp in `errors.ts` was a backspace char, so name matching never fired (the Custom-code fallback masked it). Fixed to `\b`. Simulation-then-sign flow in `tx.ts` checked by reading: no price check in the frontend.
+
+## 3. Rotating gate code (same subagent, resumed)
+Brief: SPEC §7: gate.ts pure functions, signMessage in the wallet seam, holder QR/code with 30 s rotation, organizer gate (paste + BarcodeDetector), onchain re-fetch before check_in, node:assert tests. Outcome: build and `test:gate` pass; reviewed gate.ts and Gate.tsx by reading, no defects found. Phantom signMessage and camera unverified.

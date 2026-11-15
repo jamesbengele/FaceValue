@@ -7,10 +7,11 @@ export interface AppWallet {
   publicKey: PublicKey | null;
   signTransaction: (<T extends Tx>(tx: T) => Promise<T>) | undefined;
   signAllTransactions: (<T extends Tx>(txs: T[]) => Promise<T[]>) | undefined;
+  signMessage?: (msg: Uint8Array) => Promise<Uint8Array>;
 }
 
 // The one seam for sign-in methods: Phantom today; a Privy embedded wallet can return the same shape later.
 export function useAppWallet(): AppWallet {
-  const { publicKey, signTransaction, signAllTransactions } = useWallet();
-  return { publicKey, signTransaction, signAllTransactions };
+  const { publicKey, signTransaction, signAllTransactions, signMessage } = useWallet();
+  return { publicKey, signTransaction, signAllTransactions, signMessage };
 }

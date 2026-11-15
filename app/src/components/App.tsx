@@ -10,6 +10,8 @@ import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/li
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
 import { EVENT_ADDRESS, explorerTx } from "@/lib/config";
+import GateCode from "./GateCode";
+import Gate from "./Gate";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
 
 const btn = "grad rounded-xl px-6 py-3 text-lg font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed";
@@ -81,14 +83,16 @@ export default function App() {
   const face = ev ? usd(ev.account.facePrice) : undefined;
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
-  async function run(text: string, build: () => Promise<TransactionInstruction[]>) {
+  async function run(text: string, build: () => Promise<TransactionInstruction[]>): Promise<boolean> {
     setBusy(true); setErr(null); setToast(null);
     try {
       const sig = await simulateThenSend(connection, wallet, await build());
       setToast({ sig, text });
       await load();
+      return true;
     } catch (e) {
       setErr(toUiError(e));
+      return false;
     } finally { setBusy(false); }
   }
 
@@ -199,7 +203,7 @@ export default function App() {
               </div>
             ))}
           </section>
-          {/* Gate-code scanner goes here later. */}
+          <Gate program={program} pk={pk} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
         </>
       ) : ev && (
         <>
@@ -212,6 +216,7 @@ export default function App() {
                   <span className="text-xl font-semibold">Ticket #{t.account.ticketId}</span>
                   <Pill t={t.account} />
                   {t.account.listed && <span className="text-lg">asking {usd(t.account.askPrice)}</span>}
+                  {!t.account.used && <GateCode ticket={key} wallet={wallet} />}
                   {!t.account.used && (
                     <div className="flex w-full flex-wrap items-center gap-3">
                       {!t.account.listed && (
