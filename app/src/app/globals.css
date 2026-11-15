@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { font-size: 18px; }
+body { background: #0b0a12; color: #ece9f5; }
+.grad { background-image: linear-gradient(90deg, #8b5cf6, #ec4899, #fbbf24); }
+.grad-text { background-image: linear-gradient(90deg, #8b5cf6, #ec4899, #fbbf24); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wallet-adapter-button { font-size: 1rem !important; height: 3rem !important; }
