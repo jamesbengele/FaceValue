@@ -1,11 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
-import { useAppWallet } from "@/lib/useAppWallet";
+import { PRIVY_ENABLED, useAppWallet } from "@/lib/useAppWallet";
 import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -54,6 +54,22 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ name: "UBC Student Section", face: "50", royalty: "5", supply: "20", mint: "" });
+
+  const [fundMsg, setFundMsg] = useState("");
+  const getFunds = useCallback(async () => {
+    if (!pk) return;
+    setFundMsg("Requesting test funds...");
+    try {
+      const r = await fetch("/api/drip", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ address: pk.toBase58() }) });
+      const j = await r.json();
+      setFundMsg(r.ok ? (j.sol || j.usdc ? "Test funds sent." : "You already have enough test funds.") : j.error ?? "Could not get test funds");
+    } catch (e: any) { setFundMsg(e?.message ?? "Could not get test funds"); }
+  }, [pk]);
+  // Email wallets start empty: fund once per address right after sign-in.
+  const funded = useRef("");
+  useEffect(() => {
+    if (wallet.kind === "email" && pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
+  }, [wallet.kind, pk, getFunds]);
 
   useEffect(() => { setOrganizerMode(new URLSearchParams(window.location.search).get("organizer") === "1"); }, []);
 
@@ -157,8 +173,23 @@ export default function App() {
     <main className="mx-auto max-w-3xl space-y-8 px-5 py-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="grad-text text-4xl font-extrabold">FaceValue</h1>
-        <WalletMultiButton />
+        <div className="flex flex-wrap items-center gap-3">
+          {wallet.kind === "email" ? (
+            <>
+              <span className="text-lg">Email wallet {short(pk!)}</span>
+              <button className={btn} onClick={() => wallet.emailAuth?.logout()}>Sign out</button>
+            </>
+          ) : (
+            <>
+              <WalletMultiButton />
+              {PRIVY_ENABLED && <button className={btn} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in with email</button>}
+            </>
+          )}
+          {pk && <button className={btn} onClick={getFunds}>Get test funds</button>}
+        </div>
       </header>
+      {!PRIVY_ENABLED && <p className="text-zinc-400">Email sign-in isn&apos;t configured.</p>}
+      {fundMsg && <p className="text-zinc-300">{fundMsg}</p>}
 
       {err && <ErrorBox e={err} face={face} />}
       {toast && (

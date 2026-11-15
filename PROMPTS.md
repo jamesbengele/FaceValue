@@ -19,3 +19,6 @@ Brief: SPEC §7: gate.ts pure functions, signMessage in the wallet seam, holder 
 - Program deployed from Playground wallet to devnet (program id 2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G, 314,448 bytes). Public-RPC rate limits made the upload take about 25 min.
 - `mocha` suite against devnet: 10 passing (incl. test 3 PriceAboveFace, test 5 exact-ask split, test 10 rounding).
 - Demo event created on devnet: mint AsTAYEnPr1vnwSUY1UiZuuS2fSw7F6qN3BUHNUGtUQw1, event HGzK3Z4JAppGLFrKAEDM7g2gUKp7AXVyPLukqcsFr6iK.
+
+## 4. Email sign-in (same subagent, resumed)
+Brief: Privy beside Phantom, env-gated on NEXT_PUBLIC_PRIVY_APP_ID, plugged into the `useAppWallet` seam, devnet-only `/api/drip`, README-email. Outcome: build passes with and without an App ID. What broke: the subagent truncated App.tsx mid-task and restored it from git, re-applying only its edits; Privy's optional peer deps need `--legacy-peer-deps` (added an app/.npmrc). Reviewed drip route by reading. No Privy flow run (no App ID).
