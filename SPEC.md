@@ -63,7 +63,9 @@ PDAs: Event `["event", organizer, event_id.to_le_bytes()]`; Ticket `["ticket", e
 
 **Invariant:** in `buy_resale` the buyer's token balance falls by exactly `ask_price ≤ face_price`. The royalty is never added on top.
 
-Errors: `PriceAboveFace, SoldOut, NotOwner, NotOrganizer, NotListed, TicketUsed, CannotBuyOwnTicket, InvalidPrice, NameTooLong, InvalidSupply, PriceChanged, InvalidRoyalty, InvalidTokenAccount`.
+Errors: `PriceAboveFace, SoldOut, NotOwner, NotOrganizer, NotListed, TicketUsed, CannotBuyOwnTicket, InvalidPrice, NameTooLong, InvalidSupply, PriceChanged, InvalidRoyalty, InvalidTokenAccount, MathOverflow`.
+
+Deployed: devnet `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`, built in Solana Playground (Anchor 0.29, old-format IDL, so no `ctx.bumps`; bumps come from `find_program_address`).
 
 ### Tests (TypeScript, run against devnet; mocha)
 Tests create their own mint, fund wallets by SOL transfer from the deployer, and never call `requestAirdrop`. RPC and wallet come from env. Same `declare_id!` locally and on devnet.
