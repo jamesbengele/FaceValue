@@ -46,6 +46,14 @@ export function ticketPda(event: PublicKey, id: number): PublicKey {
   )[0];
 }
 
+export function fanPda(organizer: PublicKey, fan: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("fan"), organizer.toBuffer(), fan.toBuffer()], PROGRAM_ID)[0];
+}
+
+export function presalePda(event: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("presale"), event.toBuffer()], PROGRAM_ID)[0];
+}
+
 // Returns the Anchor error name from whatever shape the failure arrives in.
 export function errName(e: any): string | undefined {
   const code = e?.error?.errorCode?.code;

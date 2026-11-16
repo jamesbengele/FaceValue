@@ -2,7 +2,7 @@
 
 Student tickets that can't be resold above face value, enforced by the Solana program itself. Spec: [SPEC.md](SPEC.md). Demo script: [docs/DEMO.md](docs/DEMO.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
-Features: USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy).
+Features: USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can give fans with enough check-ins early access to the next event (SPEC §4b; needs the program redeployed with `set_presale`).
 
 ## Layout
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `app/` Next.js app (IDL: `app/src/idl/facevalue.json`).

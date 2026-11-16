@@ -4,7 +4,7 @@ import {
   TOKEN_PROGRAM_ID, createMint, createAssociatedTokenAccount, mintTo, getAccount,
 } from "@solana/spl-token";
 import { assert } from "chai";
-import { loadDeployer, setup, eventPda, ticketPda, errName } from "./helpers";
+import { loadDeployer, setup, eventPda, ticketPda, fanPda, presalePda, errName } from "./helpers";
 
 const FACE = 50_000_000;
 const deployer = loadDeployer();
@@ -53,6 +53,7 @@ async function buy(who: Keypair, whoTok: PublicKey, e: PublicKey, tokOverride?: 
     .accounts({
       buyer: who.publicKey, event: e, ticket: t, buyerToken: tokOverride ?? whoTok, treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      presale: presalePda(e), fanPass: fanPda(st.organizer, who.publicKey),
     })
     .signers([who])
     .rpc();
@@ -73,8 +74,20 @@ const resale = (who: Keypair, e: PublicKey, t: PublicKey, sellerTok: PublicKey, 
     })
     .signers([who]).rpc();
 
-const checkIn = (who: Keypair, e: PublicKey, t: PublicKey) =>
-  p.methods.checkIn().accounts({ organizer: who.publicKey, event: e, ticket: t }).signers([who]).rpc();
+// fan_pass is derived from the event's real organizer, so a wrong signer still reaches NotOrganizer.
+async function checkIn(who: Keypair, e: PublicKey, t: PublicKey) {
+  const fan = (await p.account.ticket.fetch(t)).owner;
+  return p.methods.checkIn()
+    .accounts({ organizer: who.publicKey, event: e, ticket: t, fanPass: fanPda(organizer.publicKey, fan), systemProgram: SystemProgram.programId })
+    .signers([who]).rpc();
+}
+
+const setPresale = (who: Keypair, e: PublicKey, endsAt: number, min: number) =>
+  p.methods.setPresale(new anchor.BN(endsAt), min)
+    .accounts({ organizer: who.publicKey, event: e, presale: presalePda(e), systemProgram: SystemProgram.programId })
+    .signers([who]).rpc();
+
+const attended = async (fan: PublicKey) => (await p.account.fanPass.fetch(fanPda(organizer.publicKey, fan))).attended;
 
 describe("facevalue", function () {
   this.timeout(600_000);
@@ -195,5 +208,32 @@ describe("facevalue", function () {
     assert.equal(tr1 - tr0, 33_300);
     assert.equal(s1 - s0, ask - 33_300);
     assert.equal(b0 - b1, ask);
+  });
+
+  let e2: PublicKey;
+  it("11. fan pass: created on first check-in, one count per event", async () => {
+    await mintTo(connection, deployer, mint, bTok, deployer, 200_000_000);
+    assert.equal(await attended(B.publicKey), 1); // test 7 checked in B's ticket
+    const t1 = await buy(B, bTok, ev); // B's second ticket at the same event
+    await checkIn(organizer, ev, t1);
+    assert.equal(await attended(B.publicKey), 1);
+    e2 = await createEvt(eventId + 4, "Second Night", FACE, 0, 2);
+    await checkIn(organizer, e2, await buy(B, bTok, e2));
+    const pass = await p.account.fanPass.fetch(fanPda(organizer.publicKey, B.publicKey));
+    assert.equal(pass.attended, 2);
+    assert.equal(pass.fan.toBase58(), B.publicKey.toBase58());
+    assert.equal(pass.lastEvent.toBase58(), e2.toBase58());
+  });
+
+  it("12. early access: fans only until ends_at", async () => {
+    const pe = await createEvt(eventId + 5, "Fans First", FACE, 0, 3);
+    const endsAt = Math.floor(Date.now() / 1000) + 600;
+    await expectErr("NotOrganizer", setPresale(A, pe, endsAt, 2));
+    await expectErr("InvalidPresale", setPresale(organizer, pe, endsAt, 0));
+    await setPresale(organizer, pe, endsAt, 2);
+    await expectErr("PresaleFansOnly", buy(C, cTok, pe));
+    const t = await buy(B, bTok, pe);
+    assert.equal((await p.account.ticket.fetch(t)).owner.toBase58(), B.publicKey.toBase58());
+    await expectErr("SalesStarted", setPresale(organizer, e2, endsAt, 1));
   });
 });

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G");
@@ -44,6 +45,7 @@ pub mod facevalue {
     }
 
     pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
+        early_access_gate(&ctx.accounts.presale, &ctx.accounts.fan_pass, ctx.program_id)?;
         let (sold, max_supply, face_price) = {
             let e = &ctx.accounts.event;
             (e.sold, e.max_supply, e.face_price)
@@ -164,8 +166,118 @@ pub mod facevalue {
         let ticket = &mut ctx.accounts.ticket;
         ticket.used = true;
         ticket.listed = false;
+
+        // Attendance: one count per (organizer, fan) per event, kept by the program.
+        let event_key = ctx.accounts.event.key();
+        let organizer = ctx.accounts.organizer.key();
+        let fan = ctx.accounts.ticket.owner;
+        let bump = Pubkey::find_program_address(
+            &[b"fan", organizer.as_ref(), fan.as_ref()],
+            ctx.program_id,
+        )
+        .1;
+        let pass_ai = ctx.accounts.fan_pass.to_account_info();
+        let mut pass = if pass_ai.owner == ctx.program_id && !pass_ai.data_is_empty() {
+            let data = pass_ai.try_borrow_data()?;
+            FanPass::try_deserialize(&mut &data[..])?
+        } else {
+            create_pda(
+                &ctx.accounts.organizer.to_account_info(),
+                &pass_ai,
+                &ctx.accounts.system_program.to_account_info(),
+                ctx.program_id,
+                8 + FanPass::INIT_SPACE,
+                &[b"fan", organizer.as_ref(), fan.as_ref(), &[bump]],
+            )?;
+            FanPass { organizer, fan, attended: 0, last_event: Pubkey::default(), bump }
+        };
+        if pass.last_event != event_key {
+            pass.attended = pass.attended.checked_add(1).ok_or(FaceValueError::MathOverflow)?;
+            pass.last_event = event_key;
+        }
+        let mut data = pass_ai.try_borrow_mut_data()?;
+        pass.try_serialize(&mut &mut data[..])?;
         Ok(())
     }
+
+    pub fn set_presale(ctx: Context<SetPresale>, ends_at: i64, min_attended: u32) -> Result<()> {
+        require!(ctx.accounts.event.sold == 0, FaceValueError::SalesStarted);
+        require!(
+            min_attended > 0 && ends_at > Clock::get()?.unix_timestamp,
+            FaceValueError::InvalidPresale
+        );
+        let event_key = ctx.accounts.event.key();
+        let bump = Pubkey::find_program_address(&[b"presale", event_key.as_ref()], ctx.program_id).1;
+        let presale = &mut ctx.accounts.presale;
+        presale.event = event_key;
+        presale.ends_at = ends_at;
+        presale.min_attended = min_attended;
+        presale.bump = bump;
+        Ok(())
+    }
+}
+
+// During an event's presale window only fans with enough check-ins at this organizer's events may buy.
+// Both addresses are fixed by seeds in BuyTicket; either account may not exist.
+fn early_access_gate(presale: &AccountInfo, fan_pass: &AccountInfo, program_id: &Pubkey) -> Result<()> {
+    if presale.owner != program_id || presale.data_is_empty() {
+        return Ok(());
+    }
+    let p = {
+        let data = presale.try_borrow_data()?;
+        Presale::try_deserialize(&mut &data[..])?
+    };
+    if Clock::get()?.unix_timestamp >= p.ends_at {
+        return Ok(());
+    }
+    let attended = if fan_pass.owner == program_id && !fan_pass.data_is_empty() {
+        let data = fan_pass.try_borrow_data()?;
+        FanPass::try_deserialize(&mut &data[..])?.attended
+    } else {
+        0
+    };
+    require!(attended >= p.min_attended, FaceValueError::PresaleFansOnly);
+    Ok(())
+}
+
+// Creates a program-owned PDA even if someone already sent lamports to its address
+// (system create_account would fail on a funded address and block the fan's check-in).
+fn create_pda<'info>(
+    payer: &AccountInfo<'info>,
+    target: &AccountInfo<'info>,
+    system: &AccountInfo<'info>,
+    program_id: &Pubkey,
+    space: usize,
+    seeds: &[&[u8]],
+) -> Result<()> {
+    let rent = Rent::get()?.minimum_balance(space);
+    let short = rent.saturating_sub(target.lamports());
+    if short > 0 {
+        system_program::transfer(
+            CpiContext::new(
+                system.clone(),
+                system_program::Transfer { from: payer.clone(), to: target.clone() },
+            ),
+            short,
+        )?;
+    }
+    system_program::allocate(
+        CpiContext::new_with_signer(
+            system.clone(),
+            system_program::Allocate { account_to_allocate: target.clone() },
+            &[seeds],
+        ),
+        space as u64,
+    )?;
+    system_program::assign(
+        CpiContext::new_with_signer(
+            system.clone(),
+            system_program::Assign { account_to_assign: target.clone() },
+            &[seeds],
+        ),
+        program_id,
+    )?;
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -217,6 +329,13 @@ pub struct BuyTicket<'info> {
     pub treasury: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+    // Appended last so the previous program version ignores them as remaining accounts.
+    /// CHECK: address fixed by seeds; read only if the organizer created an early-access window.
+    #[account(seeds = [b"presale", event.key().as_ref()], bump)]
+    pub presale: UncheckedAccount<'info>,
+    /// CHECK: address fixed by seeds (this buyer's pass with this organizer); may not exist.
+    #[account(seeds = [b"fan", event.organizer.as_ref(), buyer.key().as_ref()], bump)]
+    pub fan_pass: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -269,6 +388,7 @@ pub struct BuyResale<'info> {
 
 #[derive(Accounts)]
 pub struct CheckIn<'info> {
+    #[account(mut)]
     pub organizer: Signer<'info>,
     #[account(
         constraint = event.organizer == organizer.key() @ FaceValueError::NotOrganizer
@@ -276,6 +396,49 @@ pub struct CheckIn<'info> {
     pub event: Account<'info, Event>,
     #[account(mut, has_one = event)]
     pub ticket: Account<'info, Ticket>,
+    // Appended last so the previous program version ignores them as remaining accounts.
+    /// CHECK: address fixed by seeds; created by check_in on the fan's first check-in.
+    #[account(mut, seeds = [b"fan", event.organizer.as_ref(), ticket.owner.as_ref()], bump)]
+    pub fan_pass: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetPresale<'info> {
+    #[account(mut)]
+    pub organizer: Signer<'info>,
+    #[account(
+        constraint = event.organizer == organizer.key() @ FaceValueError::NotOrganizer
+    )]
+    pub event: Account<'info, Event>,
+    #[account(
+        init,
+        payer = organizer,
+        space = 8 + Presale::INIT_SPACE,
+        seeds = [b"presale", event.key().as_ref()],
+        bump
+    )]
+    pub presale: Account<'info, Presale>,
+    pub system_program: Program<'info, System>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct FanPass {
+    pub organizer: Pubkey,
+    pub fan: Pubkey,
+    pub attended: u32,
+    pub last_event: Pubkey,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Presale {
+    pub event: Pubkey,
+    pub ends_at: i64,
+    pub min_attended: u32,
+    pub bump: u8,
 }
 
 #[account]
@@ -336,4 +499,10 @@ pub enum FaceValueError {
     InvalidTokenAccount,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    #[msg("Early access: only fans with enough check-ins at this organizer's events can buy now")]
+    PresaleFansOnly,
+    #[msg("Tickets already sold; early access must be set before the first sale")]
+    SalesStarted,
+    #[msg("Early access needs a future end time and at least 1 check-in")]
+    InvalidPresale,
 }

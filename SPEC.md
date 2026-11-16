@@ -67,6 +67,27 @@ Errors: `PriceAboveFace, SoldOut, NotOwner, NotOrganizer, NotListed, TicketUsed,
 
 Deployed: devnet `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`, built in Solana Playground (Anchor 0.29, old-format IDL, so no `ctx.bumps`; bumps come from `find_program_address`).
 
+### 4b. Fan loyalty and early access ("bots can buy tickets; they can't fake showing up")
+
+A checked-in ticket is proof of attendance: `check_in` is organizer-only and a used ticket can't be listed or resold. The program counts it per **(organizer, fan)** and lets an organizer give an **early-access window** to fans with enough check-ins at its earlier events.
+
+```rust
+#[account] #[derive(InitSpace)]
+pub struct FanPass { organizer: Pubkey, fan: Pubkey, attended: u32, last_event: Pubkey, bump: u8 } // seeds ["fan", organizer, fan]
+#[account] #[derive(InitSpace)]
+pub struct Presale { event: Pubkey, ends_at: i64, min_attended: u32, bump: u8 }                 // seeds ["presale", event]
+```
+
+| # | Instruction | Signer | Effect | Rejects |
+|---|---|---|---|---|
+| 2' | `buy_ticket()` + accounts `presale`, `fan_pass` (seeds-checked, may not exist) | buyer | If a Presale exists and `now < ends_at`: the buyer's FanPass must exist with `attended >= min_attended` | otherwise → `PresaleFansOnly` |
+| 6' | `check_in()` + accounts `fan_pass` (mut, seeds `["fan", event.organizer, ticket.owner]`), `system_program`; `organizer` becomes `mut` (pays the FanPass rent) | organizer | Creates the FanPass on a fan's first check-in (transfer/allocate/assign, so a pre-funded address can't block it). `attended += 1` only if `last_event != event` (several tickets at one event count once), then `last_event = event` | as before |
+| 7 | `set_presale(ends_at, min_attended)` | organizer | Creates Presale for an event | signer ≠ organizer → `NotOrganizer` · `sold > 0` → `SalesStarted` · `min_attended == 0` or `ends_at <= now` → `InvalidPresale` |
+
+- **Backward compatible:** `Event` and `Ticket` are unchanged, and the new accounts are appended at the end of `BuyTicket` and `CheckIn`, so the deployed (old) program ignores them as remaining accounts. The updated app keeps working before the redeploy; only `set_presale` needs the new program.
+- New errors are appended after `MathOverflow`: `PresaleFansOnly, SalesStarted, InvalidPresale`.
+- Known limits: early access doesn't cap tickets per fan; a fan who resells a presale ticket is still capped at face.
+
 ### Tests (TypeScript, run against devnet; mocha)
 Tests create their own mint, fund wallets by SOL transfer from the deployer, and never call `requestAirdrop`. RPC and wallet come from env. `declare_id!` is the ID Playground assigns on build; keep it in sync with the tests.
 1. create_event → Event matches inputs (incl. mint, treasury, royalty)
@@ -79,6 +100,8 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 8. Buying past `max_supply` → `SoldOut`
 9. `royalty_bps` 1001 → `InvalidRoyalty`; wrong-mint buyer account → `InvalidTokenAccount`; a buyer naming its own account as the treasury → `InvalidTokenAccount`
 10. Royalty rounding: ask where `ask*bps` isn't a multiple of 10_000 → royalty floored, seller gets the rest, total = ask
+11. Fan pass: test 7's check-in created B's FanPass with `attended == 1`; a second ticket of B's at the same event checked in → still 1; a check-in at another event of the organizer → 2
+12. Presale: non-organizer → `NotOrganizer`; `min_attended` 0 → `InvalidPresale`; C (no FanPass) buys during the window → `PresaleFansOnly`; B (attended 2) buys; `set_presale` after a sale → `SalesStarted`
 
 ## 5. App (Next.js App Router, devnet)
 
@@ -88,6 +111,7 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 - **Finding events and tickets:** fetch with Anchor's `account.all()` (discriminator filter only; no byte-size or field-offset `memcmp`), filter in JS. A fetch or decode failure shows its own error; "No event yet" appears only when the fetch succeeded and returned nothing. Event lists show all events on the program, including other runs' test events; use `?event=<address>` (or `NEXT_PUBLIC_EVENT_ADDRESS`, which opens that event's detail first) to go straight to one. Host shows only events whose `organizer` is the signed-in wallet, newest selected first, and the gate check stays tied to the event selected there.
 - **Date and time:** the Event account has no date field and the deployed program is unchanged, so the start time is stored in the onchain `name` as `<name>|<minutes since epoch, base36>` and parsed for display. This leaves about 25 characters for the name when a date is set (the program caps the name at 32 bytes). A name without the suffix shows "Date to be announced". Proper fix, if wanted later: a `starts_at` field in `Event` (program change and redeploy).
 - **Grouped by price:** the Resale market shows one row per price, cheapest first ("$45.00 · 3 available · Buy 1"). Buy takes the first ticket at that price; if another buyer got it first, the app tries the next one at the same price. My tickets groups by event ("2 tickets"), and each ticket keeps its own gate code, listing and status.
+- **Fan record:** event detail and My tickets show the signed-in wallet's check-ins with that organizer, read from its FanPass. During an event's early-access window the event shows "Early access for fans with N+ check-ins until <time>" and whether the user qualifies; the program enforces it. Create event has an optional early-access window (minutes) and minimum check-ins, sent as `set_presale` in the same transaction.
 - Every success toast links to Solana Explorer (`?cluster=devnet`). Dark premium look, violet → pink → amber gradient, base font ≥ 18px.
 - USDC amounts shown as `$` with 2 decimals.
 
@@ -110,7 +134,7 @@ Wallet confirmation prompts stay on (`showWalletUIs: true`), so a successful buy
 **Search:** the Events list has a client-side "Search events" box (case-insensitive match on name and date text).
 
 ## 9. Out of scope
-Per-wallet limits, cap above face, event search or filters, a date field in the program.
+Per-wallet limits (including during early access), discounts for fans, loyalty shared across organizers, cap above face, event search or filters, a date field in the program.
 
 ## 10. Repo layout
 ```

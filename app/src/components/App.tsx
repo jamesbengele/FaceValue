@@ -5,7 +5,7 @@ import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.j
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
-import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
+import { EventAcc, FanPassAcc, PresaleAcc, Row, TicketAcc, eventPda, fanPda, makeProgram, presalePda, ticketPda } from "@/lib/program";
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -37,6 +37,12 @@ function Pill({ t }: { t: TicketAcc }) {
 }
 
 function ErrorBox({ e, face }: { e: UiError; face?: string }) {
+  if (e.kind === "fv" && e.name === "PresaleFansOnly")
+    return (
+      <div role="alert" className="rounded-2xl border-2 border-amber-400 bg-amber-400/15 p-5 text-lg">
+        🎟️ <b>Fans first.</b> This event is in early access for people who checked in at this organizer&apos;s earlier events. The program checks your attendance record onchain, so a bot or a new account can&apos;t skip the line. You can buy when it opens to everyone.
+      </div>
+    );
   if (e.kind === "face")
     return (
       <div role="alert" className="rounded-2xl border-2 border-red-500 bg-red-500/15 p-5 text-lg">
@@ -50,20 +56,25 @@ function ErrorBox({ e, face }: { e: UiError; face?: string }) {
   );
 }
 
-function EventHead({ ev, big }: { ev: Row<EventAcc>; big?: boolean }) {
+function EventHead({ ev, big, early }: { ev: Row<EventAcc>; big?: boolean; early?: PresaleAcc }) {
   const m = parseName(ev.account.name);
   return (
     <div>
       <div className={big ? "text-2xl font-bold" : "text-xl font-semibold"}>{m.name}</div>
       <div className="text-zinc-300">{fmtStart(m.startMs)}</div>
       <div className="text-zinc-400">Face price {usd(ev.account.facePrice)} · {ev.account.sold} of {ev.account.maxSupply} sold</div>
+      {early && <div className="mt-1 inline-block rounded-full bg-amber-400/20 px-3 py-1 text-base text-amber-200">🎟️ Fans-only early access until {fmtTime(early)}</div>}
     </div>
   );
 }
 
+const fmtTime = (p: PresaleAcc) => new Date(p.endsAt.toNumber() * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-const LABELS = { name: "Name", start: "Date and time", face: "Face price ($)", royalty: "Royalty (%)", supply: "Max supply", mint: "Payment token mint address" };
+const LABELS = {
+  name: "Name", start: "Date and time", face: "Face price ($)", royalty: "Royalty (%)", supply: "Max supply", mint: "Payment token mint address",
+  early: "Fans-only early access (minutes from now, 0 = off)", earlyMin: "Check-ins at your past events needed for early access",
+};
 type View = "events" | "tickets" | "host";
 const NAV: [View, string][] = [["events", "Events"], ["tickets", "My tickets"], ["host", "Host an event"]];
 
@@ -78,13 +89,15 @@ export default function App() {
   const [hostSel, setHostSel] = useState(""); // event open in Host ("" = newest of mine)
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
   const [tickets, setTickets] = useState<Row<TicketAcc>[]>([]);
+  const [fanPasses, setFanPasses] = useState<Row<FanPassAcc>[]>([]);
+  const [presales, setPresales] = useState<Row<PresaleAcc>[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [err, setErr] = useState<UiError | null>(null);
   const [errFace, setErrFace] = useState<string | undefined>();
   const [toast, setToast] = useState<{ sig: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "" });
+  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1" });
 
   const [query, setQuery] = useState("");
   const [fundMsg, setFundMsg] = useState("");
@@ -125,7 +138,18 @@ export default function App() {
       setLoadErr(e?.message ?? String(e));
       return;
     }
-  }, [program]);
+    // Loyalty accounts sit at known addresses, so read them directly (lighter on the rate-limited RPC than a scan).
+    // None exist until the updated program is deployed, and a failure here must not hide events.
+    try {
+      const at = async <T,>(type: string, keys: PublicKey[]) => {
+        const accs = keys.length ? ((await (program.account as any)[type].fetchMultiple(keys)) as (T | null)[]) : [];
+        return accs.flatMap((account, i) => (account ? [{ publicKey: keys[i], account }] : []));
+      };
+      const orgs = [...new Set(evs.map((e) => e.account.organizer.toBase58()))].map((o) => new PublicKey(o));
+      setPresales(await at<PresaleAcc>("presale", evs.map((e) => presalePda(e.publicKey))));
+      setFanPasses(pk ? await at<FanPassAcc>("fanPass", orgs.map((o) => fanPda(o, pk))) : []);
+    } catch { /* keep the last good values */ }
+  }, [program, pk]);
   // Poll so other windows see new events, listings and sales without a reload.
   useEffect(() => { if (!pk) return; load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load, pk]);
 
@@ -138,6 +162,14 @@ export default function App() {
   const myEvents = useMemo(() => (pk ? allEvents.filter((e) => e.account.organizer.equals(pk)) : []), [allEvents, pk]);
   const ticketsOf = (e: Row<EventAcc>) =>
     tickets.filter((t) => t.account.event.equals(e.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
+
+  // Check-ins the signed-in wallet has with an organizer (its FanPass), and an event's open early-access window.
+  const attendedWith = (org: PublicKey) =>
+    (pk && fanPasses.find((f) => f.account.organizer.equals(org) && f.account.fan.equals(pk))?.account.attended) || 0;
+  const earlyOf = (e: Row<EventAcc>) => {
+    const p = presales.find((x) => x.account.event.equals(e.publicKey))?.account;
+    return p && p.endsAt.toNumber() * 1000 > Date.now() ? p : undefined;
+  };
 
   const selEv = byKey(sel);
   const hostEv = myEvents.find((e) => e.publicKey.toBase58() === hostSel) ?? myEvents[0];
@@ -187,6 +219,7 @@ export default function App() {
     return [await program.methods.buyTicket().accounts({
       buyer, event: e, ticket: ticketPda(e, fresh.sold), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      presale: presalePda(e), fanPass: fanPda(ev.account.organizer, buyer),
     }).instruction()];
   }, ev);
 
@@ -215,8 +248,15 @@ export default function App() {
     }).instruction()];
   }, ev);
 
-  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () =>
-    [await program.methods.checkIn().accounts({ organizer: need(), event: ev.publicKey, ticket: t.publicKey }).instruction()]);
+  // fan_pass belongs to whoever owns the ticket right now, so read the owner fresh.
+  async function checkInIx(event: PublicKey, ticket: PublicKey) {
+    const organizer = need();
+    const t = (await (program.account as any).ticket.fetch(ticket)) as TicketAcc;
+    return program.methods.checkIn().accounts({
+      organizer, event, ticket, fanPass: fanPda(organizer, t.owner), systemProgram: SystemProgram.programId,
+    }).instruction();
+  }
+  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () => [await checkInIx(ev.publicKey, t.publicKey)]);
 
   const createEvent = () => run("Event created", async () => {
     const organizer = need();
@@ -228,13 +268,21 @@ export default function App() {
     const startMs = form.start ? new Date(form.start).getTime() : null;
     if (startMs !== null && !Number.isFinite(startMs)) throw new Error("Pick a valid date and time");
     if (encodedTooLong(form.name, startMs)) throw new Error("Name too long: with a date the name can be about 25 characters");
+    const earlyMins = Number(form.early || "0"), earlyMin = Number(form.earlyMin || "0");
+    if (!Number.isFinite(earlyMins) || earlyMins < 0 || !Number.isInteger(earlyMin)) throw new Error("Early access: minutes must be 0 or more and check-ins a whole number");
     const treasury = getAssociatedTokenAddressSync(mint, organizer);
     const eventId = new BN(Date.now());
-    return [
+    const event = eventPda(organizer, eventId);
+    const ixs = [
       createAssociatedTokenAccountIdempotentInstruction(organizer, treasury, organizer, mint),
       await program.methods.createEvent(eventId, encodeName(form.name, startMs), new BN(faceBase), bps, supply)
-        .accounts({ organizer, event: eventPda(organizer, eventId), mint, treasury, systemProgram: SystemProgram.programId }).instruction(),
+        .accounts({ organizer, event, mint, treasury, systemProgram: SystemProgram.programId }).instruction(),
     ];
+    // Same transaction, so the window is set before anyone can buy. The program checks min >= 1 and a future end.
+    if (earlyMins > 0)
+      ixs.push(await program.methods.setPresale(new BN(Math.floor(Date.now() / 1000 + earlyMins * 60)), earlyMin)
+        .accounts({ organizer, event, presale: presalePda(event), systemProgram: SystemProgram.programId }).instruction());
+    return ixs;
   });
 
   const shown = allEvents.filter((e) => matchesQuery(e.account.name, query));
@@ -249,7 +297,7 @@ export default function App() {
         </div>
       ) : shown.map((ev) => (
         <button key={ev.publicKey.toBase58()} className="block w-full rounded-xl border border-white/10 p-4 text-left hover:bg-white/[0.06]" onClick={() => setSel(ev.publicKey.toBase58())}>
-          <EventHead ev={ev} />
+          <EventHead ev={ev} early={earlyOf(ev)} />
         </button>
       ))}
     </section>
@@ -258,6 +306,20 @@ export default function App() {
       <section className={`${card} space-y-3`}>
         <button className="text-zinc-400 underline" onClick={() => setSel("")}>← All events</button>
         <EventHead ev={selEv} big />
+        {(() => {
+          const early = earlyOf(selEv), n = attendedWith(selEv.account.organizer);
+          return (
+            <>
+              <p className="text-zinc-300">⭐ Your fan record with this organizer: <b>{plural(n, "check-in")}</b></p>
+              {early && (
+                <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-lg">
+                  🎟️ <b>Fans first until {fmtTime(early)}.</b> Only people with {plural(early.minAttended, "check-in")} at this organizer&apos;s past events can buy now.{" "}
+                  {n >= early.minAttended ? "You qualify. 🎉" : `You have ${n}, so you can buy when it opens to everyone.`}
+                </div>
+              )}
+            </>
+          );
+        })()}
         <button className={btn} disabled={busy} onClick={() => buyTicket(selEv)}>Buy ticket · {usd(selEv.account.facePrice)}</button>
       </section>
       <section className={`${card} space-y-4`}>
@@ -281,8 +343,24 @@ export default function App() {
   );
 
   const mine = pk ? tickets.filter((t) => t.account.owner.equals(pk) && byKey(t.account.event.toBase58())) : [];
+  const myPasses = pk ? fanPasses.filter((f) => f.account.fan.equals(pk)) : [];
   const ticketsView = (
     <>
+    <section className={`${card} space-y-3`}>
+      <h2 className="text-2xl font-bold">⭐ Fan record</h2>
+      {myPasses.length === 0 ? (
+        <p className="text-zinc-400">Get checked in at an event to start your record. Organizers can give their regulars early access to the next event, before bots and scalpers get a chance.</p>
+      ) : myPasses.map((f) => {
+        const names = allEvents.filter((e) => e.account.organizer.equals(f.account.organizer)).map((e) => parseName(e.account.name).name);
+        return (
+          <div key={f.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-lg">Host of {names.slice(0, 2).join(", ") || short(f.account.organizer)}{names.length > 2 ? "…" : ""}</span>
+            <span className="rounded-full bg-violet-500/25 px-3 py-1 text-base text-violet-200">{plural(f.account.attended, "check-in")}</span>
+          </div>
+        );
+      })}
+      <p className="text-base text-zinc-500">Counted by the program at the door. It can&apos;t be bought, sold or faked.</p>
+    </section>
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
@@ -339,7 +417,7 @@ export default function App() {
             <input className={input} type={k === "start" ? "datetime-local" : "text"} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
           </label>
         ))}
-        <p className="text-zinc-400">Your token account for this mint is created if needed and used as the treasury. Leave the date empty for &ldquo;to be announced&rdquo;.</p>
+        <p className="text-zinc-400">Your token account for this mint is created if needed and used as the treasury. Leave the date empty for &ldquo;to be announced&rdquo;. Early access lets fans who checked in at your past events buy first; the program enforces it.</p>
         <button className={btn} disabled={busy} onClick={createEvent}>Create event</button>
       </section>
       <section className={`${card} space-y-3`}>
@@ -347,7 +425,7 @@ export default function App() {
         {myEvents.length === 0 && <p className="text-zinc-400">No event yet</p>}
         {myEvents.map((ev) => (
           <button key={ev.publicKey.toBase58()} className={`block w-full rounded-xl border p-4 text-left ${ev === hostEv ? "border-violet-400" : "border-white/10"}`} onClick={() => setHostSel(ev.publicKey.toBase58())}>
-            <EventHead ev={ev} />
+            <EventHead ev={ev} early={earlyOf(ev)} />
           </button>
         ))}
         {hostEv && <p className="break-all text-base text-zinc-400">Link for buyers: <code>?event={hostEv.publicKey.toBase58()}</code></p>}
@@ -365,7 +443,7 @@ export default function App() {
           ))}
         </section>
       )}
-      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
+      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket)])} />
     </>
   );
 
