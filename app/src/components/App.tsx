@@ -92,9 +92,9 @@ export default function App() {
 
   const ev = useMemo(() => {
     if (!events) return undefined;
-    let list = events;
-    if (pinned) list = list.filter((e) => e.publicKey.toBase58() === pinned);
-    else if (organizerMode) list = pk ? list.filter((e) => e.account.organizer.equals(pk)) : [];
+    const list = organizerMode
+      ? events.filter((e) => pk && e.account.organizer.equals(pk))
+      : events.filter((e) => e.publicKey.toBase58() === pinned);
     return [...list].sort((a, b) => b.account.eventId.cmp(a.account.eventId))[0];
   }, [events, organizerMode, pk, pinned]);
 
@@ -211,7 +211,7 @@ export default function App() {
       {loadErr && <ErrorBox e={{ kind: "other", msg: "Could not load onchain data: " + loadErr }} />}
 
       <section className={card}>
-        {events === null ? (!loadErr && <p>Loading…</p>) : !ev ? <p className="text-xl">No event yet</p> : (
+        {events === null ? (!loadErr && <p>Loading…</p>) : !ev ? <p className="text-xl">{organizerMode ? "No event yet" : "Open the event link from your organizer (it ends with ?event=…)."}</p> : (
           <div className="space-y-3">
             <h2 className="text-2xl font-bold">{ev.account.name}</h2>
             <p className="text-xl">Face price <b>{face}</b> · {ev.account.sold} of {ev.account.maxSupply} sold</p>
@@ -241,11 +241,11 @@ export default function App() {
               <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xl">Ticket #{t.account.ticketId} · {short(t.account.owner)}</span>
                 <Pill t={t.account} />
-                {!t.account.used && <button className={btn} disabled={busy} onClick={() => checkIn(t)}>Check in</button>}
+                {!t.account.used && !t.account.listed && <button className={btn} disabled={busy} onClick={() => checkIn(t)}>Check in</button>}
               </div>
             ))}
           </section>
-          <Gate program={program} pk={pk} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
+          <Gate program={program} pk={pk} eventKey={ev?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
         </>
       ) : ev && (
         <>
