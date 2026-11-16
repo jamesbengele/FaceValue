@@ -25,7 +25,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       appId={PRIVY_APP_ID}
       config={{
         loginMethods: ["email"],
-        embeddedWallets: { solana: { createOnLogin: "all-users" }, showWalletUIs: false },
+        embeddedWallets: { solana: { createOnLogin: "all-users" }, showWalletUIs: true },
         plugins: [defaultSolanaRpcsPlugin()],
       }}
     >
