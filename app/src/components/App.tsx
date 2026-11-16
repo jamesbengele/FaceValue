@@ -14,8 +14,8 @@ import Gate from "./Gate";
 import { encodeName, encodedTooLong, fmtStart, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
 
-const btn = "grad rounded-xl px-6 py-3 text-lg font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed";
-const card = "rounded-2xl border border-white/10 bg-white/[0.04] p-6";
+const btn = "grad rounded-xl px-5 py-3 text-lg font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed";
+const card = "rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6";
 const input = "rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-lg w-full";
 
 function Pill({ t }: { t: TicketAcc }) {
@@ -301,13 +301,13 @@ export default function App() {
   );
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 px-5 py-10">
+    <main className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-6 sm:px-5 md:py-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="grad-text text-4xl font-extrabold">FaceValue</h1>
+        <h1 className="grad-text text-3xl font-extrabold sm:text-4xl">FaceValue</h1>
         <div className="flex flex-wrap items-center gap-3">
           {pk ? (
             <>
-              <span className="text-lg">Email wallet {short(pk)}</span>
+              <span className="text-base sm:text-lg">Email wallet {short(pk)}</span>
               <button className={btn} onClick={() => wallet.emailAuth?.logout()}>Sign out</button>
               <button className={btn} onClick={getFunds}>Get test funds</button>
             </>
@@ -331,10 +331,11 @@ export default function App() {
         </section>
       ) : (
         <div className="flex flex-col gap-6 md:flex-row">
-          <nav className="flex gap-2 md:w-52 md:shrink-0 md:flex-col">
+          {/* Phone: fixed bottom tab bar. md and up: left sidebar. */}
+          <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-white/10 bg-[#0b0a12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:w-52 md:shrink-0 md:flex-col md:gap-2 md:border-0 md:bg-transparent md:pb-0">
             {NAV.map(([v, label]) => (
-              <button key={v} className={`rounded-xl px-4 py-3 text-left text-lg ${view === v ? "grad font-semibold text-black" : "border border-white/10 hover:bg-white/[0.06]"}`}
-                onClick={() => { setView(v); if (v === "events") setSel(""); }}>{label}</button>
+              <button key={v} aria-current={view === v} className={`min-h-[56px] flex-1 px-2 text-base md:flex-none md:rounded-xl md:px-4 md:py-3 md:text-left md:text-lg ${view === v ? "font-semibold text-pink-300 md:grad md:text-black" : "text-zinc-400 md:border md:border-white/10 md:text-inherit md:hover:bg-white/[0.06]"}`}
+                onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
             ))}
           </nav>
           <div className="min-w-0 flex-1 space-y-6">

@@ -52,7 +52,7 @@ export default function GateCode({ ticket, wallet }: { ticket: string; wallet: A
       {session && !live && <p className="text-amber-300">Gate session expired. Sign again to get a new code.</p>}
       {live && (
         <div className="space-y-3">
-          {qr && <img src={qr} alt="Gate code QR" className="rounded-xl bg-white p-2" width={300} height={300} />}
+          {qr && <img src={qr} alt="Gate code QR" className="h-auto w-full max-w-[300px] rounded-xl bg-white p-2" width={300} height={300} />}
           <p className="text-lg">New code in <b>{WINDOW_SECS - (now % WINDOW_SECS)}s</b> · session ends in {Math.max(0, Math.ceil((live.expires - now) / 60))} min</p>
           <textarea readOnly value={code} rows={4} className="w-full select-all rounded-xl border border-white/15 bg-black/40 p-3 font-mono text-sm" />
           <button className={btn} onClick={() => navigator.clipboard.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>

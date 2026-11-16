@@ -57,7 +57,7 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+    <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
       <h2 className="text-2xl font-bold">Gate</h2>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Paste gate code"
         className="w-full rounded-xl border border-white/15 bg-black/40 p-3 font-mono text-sm" />
