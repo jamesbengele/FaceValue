@@ -163,11 +163,13 @@ export default function App() {
     const mint = new PublicKey(form.mint.trim());
     const faceBase = dollarsToBase(form.face);
     if (faceBase === null) throw new Error("Enter the face price as a number");
+    const bps = Math.round(Number(form.royalty) * 100), supply = Number(form.supply);
+    if (!Number.isInteger(bps) || !Number.isInteger(supply)) throw new Error("Royalty and supply must be numbers");
     const treasury = getAssociatedTokenAddressSync(mint, organizer);
     const eventId = new BN(Date.now());
     return [
       createAssociatedTokenAccountIdempotentInstruction(organizer, treasury, organizer, mint),
-      await program.methods.createEvent(eventId, form.name, new BN(faceBase), Math.round(Number(form.royalty) * 100), Number(form.supply))
+      await program.methods.createEvent(eventId, form.name, new BN(faceBase), bps, supply)
         .accounts({ organizer, event: eventPda(organizer, eventId), mint, treasury, systemProgram: SystemProgram.programId }).instruction(),
     ];
   });
