@@ -108,5 +108,5 @@ Per-wallet limits, cap above face, event list page, multiple events.
 ## 10. Repo layout
 ```
 SPEC.md  README.md  PROMPTS.md  docs/{DEMO,PITCH}.md
-program/  src/lib.rs  tests/  package.json     idl/facevalue.json     app/   (no Cargo.toml: built in Playground)
+program/  src/lib.rs  tests/  package.json     app/  src/idl/facevalue.json   (no Cargo.toml: built in Playground)
 ```

@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "setup-demo": "tsx scripts/setup-demo.ts",
-    "fund-wallet": "tsx scripts/fund-wallet.ts",
     "test:gate": "tsx src/lib/gate.test.ts",
     "test:money": "tsx src/lib/money.test.ts"
   },
@@ -21,10 +20,7 @@
     "@solana-program/token": "^0.18.0",
     "@solana/kit": "^8.6.0",
     "@solana/spl-token": "^0.4.15",
-    "@solana/wallet-adapter-base": "^0.9.28",
-    "@solana/wallet-adapter-phantom": "^0.9.30",
     "@solana/wallet-adapter-react": "^0.15.40",
-    "@solana/wallet-adapter-react-ui": "^0.9.40",
     "@solana/web3.js": "^1.99.0",
     "@stripe/stripe-js": "^10.3.0",
     "bs58": "^6.0.0",
