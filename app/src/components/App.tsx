@@ -6,6 +6,7 @@ import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
 import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
+import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
 import { EVENT_ADDRESS, explorerTx } from "@/lib/config";
@@ -60,6 +61,8 @@ function EventHead({ ev, big }: { ev: Row<EventAcc>; big?: boolean }) {
   );
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 const LABELS = { name: "Name", start: "Date and time", face: "Face price ($)", royalty: "Royalty (%)", supply: "Max supply", mint: "Payment token mint address" };
 type View = "events" | "tickets" | "host";
 const NAV: [View, string][] = [["events", "Events"], ["tickets", "My tickets"], ["host", "Host an event"]];
@@ -112,13 +115,15 @@ export default function App() {
   }, []);
 
   const load = useCallback(async () => {
+    let evs: Row<EventAcc>[];
     try {
-      const evs = (await (program.account as any).event.all()) as Row<EventAcc>[];
+      evs = (await (program.account as any).event.all()) as Row<EventAcc>[];
       const tks = (await (program.account as any).ticket.all()) as Row<TicketAcc>[];
       setEvents(evs); setTickets(tks); setLoadErr(null);
       refreshBal.current();
     } catch (e: any) {
       setLoadErr(e?.message ?? String(e));
+      return;
     }
   }, [program]);
   // Poll so other windows see new events, listings and sales without a reload.
@@ -194,13 +199,18 @@ export default function App() {
   const cancel = (t: Row<TicketAcc>) => run("Listing cancelled", async () =>
     [await program.methods.cancelListing().accounts({ owner: need(), ticket: t.publicKey }).instruction()]);
 
-  // max_price = the ask the user saw on screen.
-  const buyResale = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Resale ticket bought", async () => {
+  // Buys one ticket from a same-price group: the first one still listed at that price, re-read just now,
+  // so a ticket someone else bought a moment ago is skipped. max_price = the price the user saw on screen.
+  const buyResaleAt = (rows: Row<TicketAcc>[], ev: Row<EventAcc>) => run("Resale ticket bought", async () => {
     const buyer = need();
     const buyerToken = await buyerAta(ev.account.mint);
-    return [await program.methods.buyResale(t.account.askPrice).accounts({
-      buyer, event: ev.publicKey, ticket: t.publicKey,
-      sellerToken: getAssociatedTokenAddressSync(ev.account.mint, t.account.owner), buyerToken,
+    const price = rows[0].account.askPrice;
+    const fresh = (await (program.account as any).ticket.fetchMultiple(rows.map((r) => r.publicKey))) as (TicketAcc | null)[];
+    const i = fresh.findIndex((t) => t && t.listed && !t.used && t.askPrice.eq(price) && !t.owner.equals(buyer));
+    if (i < 0) { void load(); throw new Error(`Someone else just bought the ${usd(price)} tickets. The list is refreshing.`); }
+    return [await program.methods.buyResale(price).accounts({
+      buyer, event: ev.publicKey, ticket: rows[i].publicKey,
+      sellerToken: getAssociatedTokenAddressSync(ev.account.mint, fresh[i]!.owner), buyerToken,
       treasury: ev.account.treasury, tokenProgram: TOKEN_PROGRAM_ID,
     }).instruction()];
   }, ev);
@@ -252,16 +262,17 @@ export default function App() {
       </section>
       <section className={`${card} space-y-4`}>
         <h2 className="text-2xl font-bold">Resale market</h2>
+        <div className="inline-block rounded-full border border-white/15 px-3 py-1 text-base">Face value {usd(selEv.account.facePrice)} · Max resale {usd(selEv.account.facePrice)}</div>
         {(() => {
-          const market = ticketsOf(selEv).filter((t) => t.account.listed && !t.account.used);
-          return market.length === 0 ? <p className="text-zinc-400">Nothing listed right now.</p> : market.map((t) => (
-            <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
+          // Other people's listings, one row per price, cheapest first. Your own listings are under My tickets.
+          const groups = groupByPrice(ticketsOf(selEv).filter((t) => t.account.listed && !t.account.used && !(pk && t.account.owner.equals(pk))));
+          return groups.length === 0 ? <p className="text-zinc-400">Nothing listed right now.</p> : groups.map((g) => (
+            <div key={g.price.toString()} className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
               <div>
-                <div className="text-xl font-semibold">Ticket #{t.account.ticketId} · {usd(t.account.askPrice)}</div>
-                <div className="text-zinc-400">Seller {short(t.account.owner)}</div>
-                <div className="mt-1 inline-block rounded-full border border-white/15 px-3 py-1 text-base">Face value {usd(selEv.account.facePrice)} · Max resale {usd(selEv.account.facePrice)}</div>
+                <div className="text-xl font-semibold">{usd(g.price)}</div>
+                <div className="text-zinc-400">{g.rows.length} available</div>
               </div>
-              <button className={btn} disabled={busy} onClick={() => buyResale(t, selEv)}>Buy · {usd(t.account.askPrice)}</button>
+              <button className={btn} disabled={busy} onClick={() => buyResaleAt(g.rows, selEv)}>Buy 1 · {usd(g.price)}</button>
             </div>
           ));
         })()}
@@ -271,15 +282,27 @@ export default function App() {
 
   const mine = pk ? tickets.filter((t) => t.account.owner.equals(pk) && byKey(t.account.event.toBase58())) : [];
   const ticketsView = (
+    <>
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
-      {mine.map((t) => {
-        const key = t.publicKey.toBase58(), ev = byKey(t.account.event.toBase58())!, m = parseName(ev.account.name);
+      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).map((ev) => {
+        const ts = mine.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
+        const m = parseName(ev.account.name);
         return (
-          <div key={key} className="flex flex-wrap items-center gap-3">
-            <div className="w-full text-zinc-300">{m.name} · {fmtStart(m.startMs)}</div>
-            <span className="text-xl font-semibold">Ticket #{t.account.ticketId}</span>
+          <div key={ev.publicKey.toBase58()} className="space-y-4 rounded-xl border border-white/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-xl font-semibold">{m.name}</div>
+                <div className="text-zinc-400">{fmtStart(m.startMs)}</div>
+              </div>
+              <span className="rounded-full border border-white/15 px-3 py-1 text-base">{plural(ts.length, "ticket")}</span>
+            </div>
+            {ts.map((t, i) => {
+        const key = t.publicKey.toBase58();
+        return (
+          <div key={key} className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+            {ts.length > 1 && <span className="text-lg text-zinc-300">Ticket {i + 1} of {ts.length}</span>}
             <Pill t={t.account} />
             {t.account.listed && <span className="text-lg">asking {usd(t.account.askPrice)}</span>}
             {!t.account.used && <GateCode ticket={key} wallet={wallet} />}
@@ -298,8 +321,12 @@ export default function App() {
             )}
           </div>
         );
+            })}
+          </div>
+        );
       })}
     </section>
+    </>
   );
 
   const hostView = (

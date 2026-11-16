@@ -9,7 +9,8 @@
     "setup-demo": "tsx scripts/setup-demo.ts",
     "test:gate": "tsx src/lib/gate.test.ts",
     "test:money": "tsx src/lib/money.test.ts",
-    "test:meta": "tsx src/lib/eventMeta.test.ts"
+    "test:meta": "tsx src/lib/eventMeta.test.ts",
+    "test:market": "tsx src/lib/market.test.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
