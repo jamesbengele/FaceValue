@@ -45,13 +45,13 @@ async function createEvt(id: number, name: string, face: number, bps: number, su
   return e;
 }
 
-async function buy(who: Keypair, whoTok: PublicKey, e: PublicKey, tokOverride?: PublicKey) {
+async function buy(who: Keypair, whoTok: PublicKey, e: PublicKey, tokOverride?: PublicKey, treasury: PublicKey = orgTok) {
   const st = await p.account.event.fetch(e);
   const t = ticketPda(e, st.sold);
   await p.methods
     .buyTicket()
     .accounts({
-      buyer: who.publicKey, event: e, ticket: t, buyerToken: tokOverride ?? whoTok, treasury: orgTok,
+      buyer: who.publicKey, event: e, ticket: t, buyerToken: tokOverride ?? whoTok, treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     })
     .signers([who])
@@ -62,6 +62,8 @@ async function buy(who: Keypair, whoTok: PublicKey, e: PublicKey, tokOverride?: 
 const list = (who: Keypair, e: PublicKey, t: PublicKey, price: number) =>
   p.methods.listTicket(new anchor.BN(price))
     .accounts({ owner: who.publicKey, event: e, ticket: t }).signers([who]).rpc();
+
+const cancel = (who: Keypair, t: PublicKey) => p.methods.cancelListing().accounts({ owner: who.publicKey, ticket: t }).signers([who]).rpc();
 
 const resale = (who: Keypair, e: PublicKey, t: PublicKey, sellerTok: PublicKey, buyerTok: PublicKey, max: number) =>
   p.methods.buyResale(new anchor.BN(max))
@@ -122,11 +124,25 @@ describe("facevalue", function () {
     await expectErr("PriceAboveFace", list(A, ev, t0, 80_000_000));
   });
 
+  it("3b. listing above face by naming a pricier event -> ConstraintHasOne", async () => {
+    const pricey = await createEvt(eventId + 4, "Pricey", 1_000_000_000, 0, 1);
+    await expectErr("ConstraintHasOne", list(A, pricey, t0, 80_000_000));
+  });
+
   it("4. listing at face works", async () => {
     await list(A, ev, t0, FACE);
     const t = await p.account.ticket.fetch(t0);
     assert.isTrue(t.listed);
     assert.equal(t.askPrice.toNumber(), FACE);
+  });
+
+  it("4b. cancel_listing: non-owner -> NotOwner; owner cancels; relist", async () => {
+    await expectErr("NotOwner", cancel(B, t0));
+    await cancel(A, t0);
+    const t = await p.account.ticket.fetch(t0);
+    assert.isFalse(t.listed);
+    assert.equal(t.askPrice.toNumber(), 0);
+    await list(A, ev, t0, FACE);
   });
 
   it("5. resale: bad seller account, PriceChanged, then exact-ask payment split", async () => {
@@ -165,6 +181,7 @@ describe("facevalue", function () {
   it("9. royalty 1001 -> InvalidRoyalty; wrong-mint buyer account -> InvalidTokenAccount", async () => {
     await expectErr("InvalidRoyalty", createEvt(eventId + 2, "Bad", FACE, 1001, 1));
     await expectErr("InvalidTokenAccount", buy(B, bTok, ev, bOtherTok));
+    await expectErr("InvalidTokenAccount", buy(B, bTok, ev, undefined, bTok));
   });
 
   it("10. royalty rounding floors, seller gets the rest", async () => {

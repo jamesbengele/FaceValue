@@ -71,13 +71,13 @@ Deployed: devnet `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`, built in Solana
 Tests create their own mint, fund wallets by SOL transfer from the deployer, and never call `requestAirdrop`. RPC and wallet come from env. `declare_id!` is the ID Playground assigns on build; keep it in sync with the tests.
 1. create_event → Event matches inputs (incl. mint, treasury, royalty)
 2. A buys → A owns, treasury +face, A token −face, `sold == 1`
-3. **A lists above face → `PriceAboveFace`**
-4. A lists at face → listed
+3. **A lists above face → `PriceAboveFace`**; listing above face by naming a pricier event of the same organizer → `ConstraintHasOne`
+4. A lists at face → listed; `cancel_listing`: non-owner → `NotOwner`, owner cancels (`listed = false`, `ask_price = 0`), then relists at face
 5. B names its own token account as the seller's → `InvalidTokenAccount`; `max_price` below ask → `PriceChanged`; B buys resale → B owns; **B's balance falls by exactly the ask; seller +ask−royalty; treasury +royalty; the three deltas add up**
 6. A (no longer owner) lists → `NotOwner`
 7. A checks in → `NotOrganizer`; organizer checks in B's ticket → used; B lists → `TicketUsed`
 8. Buying past `max_supply` → `SoldOut`
-9. `royalty_bps` 1001 → `InvalidRoyalty`; wrong-mint buyer account → `InvalidTokenAccount`
+9. `royalty_bps` 1001 → `InvalidRoyalty`; wrong-mint buyer account → `InvalidTokenAccount`; a buyer naming its own account as the treasury → `InvalidTokenAccount`
 10. Royalty rounding: ask where `ask*bps` isn't a multiple of 10_000 → royalty floored, seller gets the rest, total = ask
 
 ## 5. App (Next.js App Router, devnet)
