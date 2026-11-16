@@ -48,6 +48,7 @@ export function verifyCode(code: string, ctx: { now: number; origin: string }): 
       return { ok: false, reason: "Code signature invalid" };
   } catch { return { ok: false, reason: "Code is malformed" }; }
   if (c.e <= ctx.now) return { ok: false, reason: "Code session expired" };
+  if (c.e > ctx.now + SESSION_SECS + 2 * WINDOW_SECS) return { ok: false, reason: "Code session is too long" };
   if (Math.abs(c.n - windowOf(ctx.now)) > 1) return { ok: false, reason: "Code expired, ask the holder for a fresh one" };
   return { ok: true, ticket: c.t, wallet: c.w };
 }

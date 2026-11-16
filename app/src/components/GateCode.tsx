@@ -4,7 +4,7 @@ import nacl from "tweetnacl";
 import bs58 from "bs58";
 import QRCode from "qrcode";
 import { SESSION_SECS, WINDOW_SECS, makeCode, sessionMessage } from "@/lib/gate";
-import type { AppWallet } from "@/lib/useAppWallet";
+import type { AppWallet } from "@/lib/privyWallet";
 
 const btn = "grad rounded-xl px-6 py-3 text-lg font-semibold text-black disabled:opacity-40";
 const nowSecs = () => Math.floor(Date.now() / 1000);

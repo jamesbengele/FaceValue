@@ -25,7 +25,7 @@ export function setup(deployer: Keypair) {
     commitment: "confirmed",
   });
   const idl = JSON.parse(
-    fs.readFileSync(path.resolve(__dirname, "../../idl/facevalue.json"), "utf8")
+    fs.readFileSync(path.resolve(__dirname, "../../app/src/idl/facevalue.json"), "utf8")
   );
   // Old-format IDL: programId is passed explicitly. For a 0.30+ IDL use new anchor.Program(idl, provider).
   const program = new anchor.Program(idl as anchor.Idl, PROGRAM_ID, provider);

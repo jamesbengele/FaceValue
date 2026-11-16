@@ -1,6 +1,6 @@
 import { Connection, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import { SimError } from "./errors";
-import type { AppWallet } from "./useAppWallet";
+import type { AppWallet } from "./privyWallet";
 
 // Simulate first. If the program rejects, throw before the wallet is ever asked to sign.
 export async function simulateThenSend(connection: Connection, wallet: AppWallet, ixs: TransactionInstruction[]) {

@@ -1,7 +1,7 @@
 # Email sign-in (Privy) and test funds
 
-Email sign-in is optional and sits beside Phantom. Without an App ID the app is Phantom-only and shows
-"Email sign-in isn't configured."
+Email sign-in is the only way to sign in. Without an App ID the app shows "Email sign-in isn't configured"
+and nothing else.
 
 ## 1. App ID
 Create `app/.env.local` (git-ignored) and add:
@@ -18,7 +18,7 @@ Restart `npm run dev` (the value is read at build/start time).
 
 ## 3. Test-fund route (`POST /api/drip`, devnet only)
 Email wallets start with no SOL and no token account, so the app calls `/api/drip` right after sign-in
-(Phantom users get a "Get test funds" button). Server env vars, in `app/.env.local`:
+(there is also a "Get test funds" button for everyone). Server env vars, in `app/.env.local`:
 
 | Var | Meaning |
 |---|---|

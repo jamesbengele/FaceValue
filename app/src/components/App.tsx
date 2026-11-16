@@ -4,7 +4,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
-import { useAppWallet } from "@/lib/useAppWallet";
+import { useAppWallet } from "@/lib/privyWallet";
 import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -42,7 +42,7 @@ export default function App() {
   const { connection } = useConnection();
   const wallet = useAppWallet();
   const pk = wallet.publicKey;
-  const program = useMemo(() => makeProgram(connection, wallet), [connection, wallet.publicKey, wallet.signTransaction, wallet.signAllTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const program = useMemo(() => makeProgram(connection), [connection]);
 
   const [organizerMode, setOrganizerMode] = useState(false);
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
@@ -67,8 +67,8 @@ export default function App() {
   // Email wallets start empty: fund once per address right after sign-in.
   const funded = useRef("");
   useEffect(() => {
-    if (wallet.kind === "email" && pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
-  }, [wallet.kind, pk, getFunds]);
+    if (pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
+  }, [pk, getFunds]);
 
   // `?event=<address>` pins one event (other runs on this program also create events); env var is the default pin.
   const [pinned, setPinned] = useState(EVENT_ADDRESS);
@@ -92,9 +92,9 @@ export default function App() {
 
   const ev = useMemo(() => {
     if (!events) return undefined;
-    let list = events;
-    if (pinned) list = list.filter((e) => e.publicKey.toBase58() === pinned);
-    else if (organizerMode) list = pk ? list.filter((e) => e.account.organizer.equals(pk)) : [];
+    const list = organizerMode
+      ? events.filter((e) => pk && e.account.organizer.equals(pk))
+      : events.filter((e) => e.publicKey.toBase58() === pinned);
     return [...list].sort((a, b) => b.account.eventId.cmp(a.account.eventId))[0];
   }, [events, organizerMode, pk, pinned]);
 
@@ -163,11 +163,13 @@ export default function App() {
     const mint = new PublicKey(form.mint.trim());
     const faceBase = dollarsToBase(form.face);
     if (faceBase === null) throw new Error("Enter the face price as a number");
+    const bps = Math.round(Number(form.royalty) * 100), supply = Number(form.supply);
+    if (!Number.isInteger(bps) || !Number.isInteger(supply)) throw new Error("Royalty and supply must be numbers");
     const treasury = getAssociatedTokenAddressSync(mint, organizer);
     const eventId = new BN(Date.now());
     return [
       createAssociatedTokenAccountIdempotentInstruction(organizer, treasury, organizer, mint),
-      await program.methods.createEvent(eventId, form.name, new BN(faceBase), Math.round(Number(form.royalty) * 100), Number(form.supply))
+      await program.methods.createEvent(eventId, form.name, new BN(faceBase), bps, supply)
         .accounts({ organizer, event: eventPda(organizer, eventId), mint, treasury, systemProgram: SystemProgram.programId }).instruction(),
     ];
   });
@@ -180,9 +182,9 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="grad-text text-4xl font-extrabold">FaceValue</h1>
         <div className="flex flex-wrap items-center gap-3">
-          {wallet.kind === "email" ? (
+          {pk ? (
             <>
-              <span className="text-lg">Email wallet {short(pk!)}</span>
+              <span className="text-lg">Email wallet {short(pk)}</span>
               <button className={btn} onClick={() => wallet.emailAuth?.logout()}>Sign out</button>
             </>
           ) : (
@@ -211,7 +213,7 @@ export default function App() {
       {loadErr && <ErrorBox e={{ kind: "other", msg: "Could not load onchain data: " + loadErr }} />}
 
       <section className={card}>
-        {events === null ? (!loadErr && <p>Loading…</p>) : !ev ? <p className="text-xl">No event yet</p> : (
+        {events === null ? (!loadErr && <p>Loading…</p>) : !ev ? <p className="text-xl">{organizerMode ? "No event yet" : "Open the event link from your organizer (it ends with ?event=…)."}</p> : (
           <div className="space-y-3">
             <h2 className="text-2xl font-bold">{ev.account.name}</h2>
             <p className="text-xl">Face price <b>{face}</b> · {ev.account.sold} of {ev.account.maxSupply} sold</p>
@@ -241,11 +243,11 @@ export default function App() {
               <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xl">Ticket #{t.account.ticketId} · {short(t.account.owner)}</span>
                 <Pill t={t.account} />
-                {!t.account.used && <button className={btn} disabled={busy} onClick={() => checkIn(t)}>Check in</button>}
+                {!t.account.used && !t.account.listed && <button className={btn} disabled={busy} onClick={() => checkIn(t)}>Check in</button>}
               </div>
             ))}
           </section>
-          <Gate program={program} pk={pk} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
+          <Gate program={program} pk={pk} eventKey={ev?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await program.methods.checkIn().accounts({ organizer: need(), event: t.event, ticket: t.ticket }).instruction()])} />
         </>
       ) : ev && (
         <>
