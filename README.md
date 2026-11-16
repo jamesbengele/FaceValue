@@ -1,4 +1,4 @@
-# FaceValue (UBC rebuild)
+# FaceValue (UBC build)
 
 Student tickets that can't be resold above face value, enforced by the Solana program itself. Spec: [SPEC.md](SPEC.md). Demo script: [docs/DEMO.md](docs/DEMO.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
