@@ -82,10 +82,11 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 
 ## 5. App (Next.js App Router, devnet)
 
-`@coral-xyz/anchor` with the committed IDL; `@solana/wallet-adapter-react` (ConnectionProvider only); Privy email sign-in is the only login (§8). One page, three sections: **Event card** (face price, X of Y sold, Buy), **My tickets** (status pill, price input pre-filled with face, List / Cancel listing, **Show gate code**), **Resale market** (price, seller, Buy, "Face value $50 · Max resale $50" badge). `?organizer=1`: Create event form, tickets list with **Check in**, and the gate scanner (§7).
+`@coral-xyz/anchor` with the committed IDL; `@solana/wallet-adapter-react` (ConnectionProvider only); Privy email sign-in is the only login (§8). A sidebar with three views. **Events**: a list of every event on the program (soonest first; each shows name, date and time, face price, X of Y sold); opening one shows the event detail with **Buy** and its **Resale market** (price, seller, Buy, "Face value $50 · Max resale $50" badge). **My tickets**: the signed-in wallet's tickets across all events (event name and date, status pill, price input pre-filled with the event's face price, List / Cancel listing, **Show gate code**). **Host an event**: Create event form (name, date and time, face price, royalty, supply, mint), the organizer's own events (pick one), its tickets with **Check in**, and the gate scanner (§7). `?event=<address>` opens that event's detail; `?organizer=1` opens Host.
 
 - **No price validation in the frontend.** Transactions are simulated; a `PriceAboveFace` simulation error shows the red banner: "🚫 **Blocked by the ticket itself.** Resale price can't exceed face value ($50). This rule is enforced onchain." The wallet is never asked to sign.
-- **Finding events and tickets:** fetch with Anchor's `account.all()` (discriminator filter only; no byte-size or field-offset `memcmp`), filter in JS. A fetch or decode failure shows its own error; "No event yet" appears only when the fetch succeeded and returned nothing. The organizer view shows the signed-in organizer's newest event. The buyer view shows only the pinned event (`?event=<address>`, or `NEXT_PUBLIC_EVENT_ADDRESS` as the default); with no pin it asks for the event link. There is no "newest event from anyone" fallback.
+- **Finding events and tickets:** fetch with Anchor's `account.all()` (discriminator filter only; no byte-size or field-offset `memcmp`), filter in JS. A fetch or decode failure shows its own error; "No event yet" appears only when the fetch succeeded and returned nothing. Event lists show all events on the program, including other runs' test events; use `?event=<address>` (or `NEXT_PUBLIC_EVENT_ADDRESS`, which opens that event's detail first) to go straight to one. Host shows only events whose `organizer` is the signed-in wallet, newest selected first, and the gate check stays tied to the event selected there.
+- **Date and time:** the Event account has no date field and the deployed program is unchanged, so the start time is stored in the onchain `name` as `<name>|<minutes since epoch, base36>` and parsed for display. This leaves about 25 characters for the name when a date is set (the program caps the name at 32 bytes). A name without the suffix shows "Date to be announced". Proper fix, if wanted later: a `starts_at` field in `Event` (program change and redeploy).
 - Every success toast links to Solana Explorer (`?cluster=devnet`). Dark premium look, violet → pink → amber gradient, base font ≥ 18px.
 - USDC amounts shown as `$` with 2 decimals.
 
@@ -104,7 +105,7 @@ Known gap: `check_in` does not name the owner the gate verified, so a resale tha
 Wallet confirmation prompts stay on (`showWalletUIs: true`), so a successful buy asks the user to confirm and a blocked listing never does.
 
 ## 9. Out of scope
-Per-wallet limits, cap above face, event list page, multiple events.
+Per-wallet limits, cap above face, event search or filters, a date field in the program.
 
 ## 10. Repo layout
 ```
