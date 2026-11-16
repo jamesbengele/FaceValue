@@ -34,6 +34,10 @@ assert.strictEqual(verifyCode(mk({ now: now + 60 }), ctx).ok, false);
 assert.strictEqual(windowOf(now), parse(mk()).n);
 // wrong origin
 assert.strictEqual(verifyCode(mk(), { now, origin: "https://evil.example" }).ok, false);
+// a session longer than 15 min (+60 s slack) is refused even though the wallet signed it
+const sessionSig = (e: number) => nacl.sign.detached(new TextEncoder().encode(sessionMessage({ ticket, ephemeralPubkey: bs58.encode(eph.publicKey), expires: e, origin })), wallet.secretKey);
+assert.strictEqual(verifyCode(mk({ expires: now + 960, walletSig: sessionSig(now + 960) }), ctx).ok, true);
+assert.deepStrictEqual(verifyCode(mk({ expires: now + 961, walletSig: sessionSig(now + 961) }), ctx), { ok: false, reason: "Code session is too long" });
 // garbage
 assert.strictEqual(verifyCode("!!!", ctx).ok, false);
 console.log("gate tests passed");

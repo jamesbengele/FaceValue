@@ -35,10 +35,6 @@ export async function POST(req: Request) {
   } catch { return NextResponse.json({ error: "Invalid address" }, { status: 400 }); }
 
   const key = address.toBase58();
-  const wait = 60_000 - (Date.now() - (lastDrip.get(key) ?? 0));
-  if (wait > 0) return NextResponse.json({ error: `Try again in ${Math.ceil(wait / 1000)}s` }, { status: 429 });
-  lastDrip.set(key, Date.now());
-
   try {
     const kp = serverKey();
     const mint = new PublicKey(mintStr);
@@ -49,14 +45,21 @@ export async function POST(req: Request) {
     const tokens = ataInfo ? Number(ataInfo.data.readBigUInt64LE(64)) : 0; // SPL token account: amount at byte 64
 
     const gaveSol = sol < SOL_MIN, gaveUsdc = tokens < USDC_MIN;
-    const tx = new Transaction();
-    if (gaveSol) tx.add(SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: address, lamports: SOL_SEND }));
-    tx.add(createAssociatedTokenAccountIdempotentInstruction(kp.publicKey, ata, address, mint));
-    if (gaveUsdc) tx.add(createMintToInstruction(mint, ata, kp.publicKey, USDC_MINT));
-    const signature = await sendAndConfirmTransaction(conn, tx, [kp]);
-    return NextResponse.json({ ok: true, sol: gaveSol, usdc: gaveUsdc, signature });
+    if (!gaveSol && !gaveUsdc && ataInfo) return NextResponse.json({ ok: true, sol: false, usdc: false });
+
+    // The cooldown guards only the send. Keep the check and the set together, with no await between them.
+    const wait = 60_000 - (Date.now() - (lastDrip.get(key) ?? 0));
+    if (wait > 0) return NextResponse.json({ error: `Try again in ${Math.ceil(wait / 1000)}s` }, { status: 429 });
+    lastDrip.set(key, Date.now());
+    try {
+      const tx = new Transaction();
+      if (gaveSol) tx.add(SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: address, lamports: SOL_SEND }));
+      tx.add(createAssociatedTokenAccountIdempotentInstruction(kp.publicKey, ata, address, mint));
+      if (gaveUsdc) tx.add(createMintToInstruction(mint, ata, kp.publicKey, USDC_MINT));
+      const signature = await sendAndConfirmTransaction(conn, tx, [kp]);
+      return NextResponse.json({ ok: true, sol: gaveSol, usdc: gaveUsdc, signature });
+    } catch (e) { lastDrip.delete(key); throw e; }
   } catch (e: any) {
-    lastDrip.delete(key);
     console.error("drip failed:", e?.message ?? "unknown"); // message only, never key material
     return NextResponse.json({ error: "Drip failed" }, { status: 500 });
   }
