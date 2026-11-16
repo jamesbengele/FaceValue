@@ -2,7 +2,7 @@
 
 Student tickets that can't be resold above face value, enforced by the Solana program itself. Spec: [SPEC.md](SPEC.md). Demo script: [docs/DEMO.md](docs/DEMO.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
-Features: USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), Phantom or email sign-in (Privy).
+Features: USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy).
 
 ## Layout
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `idl/facevalue.json` · `app/` Next.js app.

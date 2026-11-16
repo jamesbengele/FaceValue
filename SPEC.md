@@ -21,7 +21,7 @@ The ticket is **not** a transferable token. It is an account owned by our progra
 | **USDC, not SOL** | Prices and payments are SPL tokens (6 decimals, $50 = `50_000_000`). The mint is stored on the Event, not hardcoded, so tests and the demo use a mint we create; real USDC works unchanged. |
 | **Organizer royalty** | `royalty_bps` on the Event (max 1000 = 10%). On a resale the royalty is taken **out of the seller's share**. The buyer pays exactly `ask_price`, which is at most face. |
 | **Rotating gate QR** | Offchain, no program change (§7). |
-| **Email sign-in** | Privy embedded Solana wallet, added beside Phantom (§8). |
+| **Email sign-in** | Privy embedded Solana wallet; the only sign-in method (§8). |
 
 ## 4. Program (Anchor, single file `program/src/lib.rs`)
 
@@ -82,7 +82,7 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 
 ## 5. App (Next.js App Router, devnet)
 
-`@coral-xyz/anchor` with the committed IDL; `@solana/wallet-adapter-react` + Phantom; Privy for email (§8). One page, three sections: **Event card** (face price, X of Y sold, Buy), **My tickets** (status pill, price input pre-filled with face, List / Cancel listing, **Show gate code**), **Resale market** (price, seller, Buy, "Face value $50 · Max resale $50" badge). `?organizer=1`: Create event form, tickets list with **Check in**, and the gate scanner (§7).
+`@coral-xyz/anchor` with the committed IDL; `@solana/wallet-adapter-react` (ConnectionProvider only); Privy email sign-in is the only login (§8). One page, three sections: **Event card** (face price, X of Y sold, Buy), **My tickets** (status pill, price input pre-filled with face, List / Cancel listing, **Show gate code**), **Resale market** (price, seller, Buy, "Face value $50 · Max resale $50" badge). `?organizer=1`: Create event form, tickets list with **Check in**, and the gate scanner (§7).
 
 - **No price validation in the frontend.** Transactions are simulated; a `PriceAboveFace` simulation error shows the red banner: "🚫 **Blocked by the ticket itself.** Resale price can't exceed face value ($50). This rule is enforced onchain." The wallet is never asked to sign.
 - **Finding events and tickets:** fetch with Anchor's `account.all()` (discriminator filter only; no byte-size or field-offset `memcmp`), filter in JS. A fetch or decode failure shows its own error; "No event yet" appears only when the fetch succeeded and returned nothing.
@@ -99,7 +99,7 @@ Buy ($50) → list at $80 blocked → list at $50 → buyer buys (seller gets $5
 Limit, stated plainly: a code is valid for under ~90 s and can be forwarded live to a stranger; it defeats screenshots, not a holder who cooperates in real time.
 
 ## 8. Email sign-in (Privy)
-`@privy-io/react-auth` with `loginMethods: ['wallet','email']`, `embeddedWallets.solana createOnLogin: 'all-users'`. Needs `NEXT_PUBLIC_PRIVY_APP_ID` (user creates the Privy app). Email wallets need SOL for rent/fees, a USDC token account and test USDC: a devnet-only `/api/drip` route (server key from env) sends a small SOL top-up and mints test USDC when the wallet is below a threshold. A real launch needs fee sponsorship (a paymaster/relayer), real USDC via on-ramp, and auth/rate-limits on that route.
+`@privy-io/react-auth` with `loginMethods: ['email']`, `embeddedWallets.solana createOnLogin: 'all-users'`. Needs `NEXT_PUBLIC_PRIVY_APP_ID` (user creates the Privy app). Email wallets need SOL for rent/fees, a USDC token account and test USDC: a devnet-only `/api/drip` route (server key from env) sends a small SOL top-up and mints test USDC when the wallet is below a threshold. A real launch needs fee sponsorship (a paymaster/relayer), real USDC via on-ramp, and auth/rate-limits on that route.
 
 ## 9. Out of scope
 Per-wallet limits, cap above face, event list page, multiple events.

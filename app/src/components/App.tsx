@@ -1,11 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
-import { PRIVY_ENABLED, useAppWallet } from "@/lib/useAppWallet";
+import { useAppWallet } from "@/lib/useAppWallet";
 import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -89,7 +88,7 @@ export default function App() {
     }
   }, [program]);
   // Poll so other windows see new events, listings and sales without a reload.
-  useEffect(() => { load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { if (!pk) return; load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load, pk]);
 
   const ev = useMemo(() => {
     if (!events) return undefined;
@@ -188,14 +187,12 @@ export default function App() {
             </>
           ) : (
             <>
-              <WalletMultiButton />
-              {PRIVY_ENABLED && <button className={btn} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in with email</button>}
+              <button className={btn} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in with email</button>
             </>
           )}
           {pk && <button className={btn} onClick={getFunds}>Get test funds</button>}
         </div>
       </header>
-      {!PRIVY_ENABLED && <p className="text-zinc-400">Email sign-in isn&apos;t configured.</p>}
       {fundMsg && <p className="text-zinc-300">{fundMsg}</p>}
 
       {err && <ErrorBox e={err} face={face} />}
@@ -204,6 +201,13 @@ export default function App() {
           ✅ {toast.text}. <a className="underline" href={explorerTx(toast.sig)} target="_blank" rel="noreferrer">View on Solana Explorer</a>
         </div>
       )}
+      {!pk ? (
+        <section className={card}>
+          <h2 className="text-2xl font-bold">Sign in to see events</h2>
+          <p className="mt-2 text-zinc-400">Sign in with your email to view and buy tickets.</p>
+        </section>
+      ) : (
+      <>
       {loadErr && <ErrorBox e={{ kind: "other", msg: "Could not load onchain data: " + loadErr }} />}
 
       <section className={card}>
@@ -213,7 +217,6 @@ export default function App() {
             <p className="text-xl">Face price <b>{face}</b> · {ev.account.sold} of {ev.account.maxSupply} sold</p>
             {organizerMode && <p className="break-all text-base text-zinc-400">Event address (open the other windows with <code>?event=</code> this): {ev.publicKey.toBase58()}</p>}
             {!organizerMode && <button className={btn} disabled={busy || !pk} onClick={buyTicket}>Buy ticket · {face}</button>}
-            {!pk && <p className="text-zinc-400">Connect a wallet to buy.</p>}
           </div>
         )}
       </section>
@@ -248,7 +251,7 @@ export default function App() {
         <>
           <section className={`${card} space-y-4`}>
             <h2 className="text-2xl font-bold">My tickets</h2>
-            {!pk ? <p className="text-zinc-400">Connect a wallet to see your tickets.</p> : mine.length === 0 ? <p className="text-zinc-400">You don&apos;t own a ticket yet.</p> : mine.map((t) => {
+            {mine.length === 0 ? <p className="text-zinc-400">You don&apos;t own a ticket yet.</p> : mine.map((t) => {
               const key = t.publicKey.toBase58();
               return (
                 <div key={key} className="flex flex-wrap items-center gap-3">
@@ -289,6 +292,8 @@ export default function App() {
             ))}
           </section>
         </>
+      )}
+      </>
       )}
     </main>
   );
