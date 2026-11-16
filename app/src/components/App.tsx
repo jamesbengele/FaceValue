@@ -11,8 +11,20 @@ import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
 import { EVENT_ADDRESS, explorerTx } from "@/lib/config";
 import GateCode from "./GateCode";
 import Gate from "./Gate";
-import { encodeName, encodedTooLong, fmtStart, parseName } from "@/lib/eventMeta";
+import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState("dark");
+  useEffect(() => setTheme(document.documentElement.dataset.theme ?? "dark"), []);
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button className="rounded-xl border border-white/15 px-3 text-xl" aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
+      onClick={() => { document.documentElement.dataset.theme = next; setTheme(next); try { localStorage.setItem("theme", next); } catch {} }}>
+      {theme === "dark" ? "☀" : "☾"}
+    </button>
+  );
+}
 
 const btn = "grad rounded-xl px-5 py-3 text-lg font-semibold text-black disabled:opacity-40 disabled:cursor-not-allowed";
 const card = "rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6";
@@ -71,7 +83,11 @@ export default function App() {
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "" });
 
+  const [query, setQuery] = useState("");
   const [fundMsg, setFundMsg] = useState("");
+  const [bal, setBal] = useState<{ sol: number; usd: string | null } | "error" | null>(null);
+  // Set below once the payment mint is known; load() and getFunds() call it so every refresh path updates the balance.
+  const refreshBal = useRef<() => Promise<void>>(async () => {});
   const getFunds = useCallback(async () => {
     if (!pk) return;
     setFundMsg("Requesting test funds...");
@@ -79,6 +95,7 @@ export default function App() {
       const r = await fetch("/api/drip", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ address: pk.toBase58() }) });
       const j = await r.json();
       setFundMsg(r.ok ? (j.sol || j.usdc ? "Test funds sent." : "You already have enough test funds.") : j.error ?? "Could not get test funds");
+      refreshBal.current();
     } catch (e: any) { setFundMsg(e?.message ?? "Could not get test funds"); }
   }, [pk]);
   // Email wallets start empty: fund once per address right after sign-in.
@@ -99,6 +116,7 @@ export default function App() {
       const evs = (await (program.account as any).event.all()) as Row<EventAcc>[];
       const tks = (await (program.account as any).ticket.all()) as Row<TicketAcc>[];
       setEvents(evs); setTickets(tks); setLoadErr(null);
+      refreshBal.current();
     } catch (e: any) {
       setLoadErr(e?.message ?? String(e));
     }
@@ -118,6 +136,23 @@ export default function App() {
 
   const selEv = byKey(sel);
   const hostEv = myEvents.find((e) => e.publicKey.toBase58() === hostSel) ?? myEvents[0];
+
+  // Balance: SOL plus the token balance of the open event's payment mint (a missing token account is $0.00).
+  const payMint = (selEv ?? hostEv ?? allEvents[0])?.account.mint;
+  const payMintStr = payMint?.toBase58();
+  refreshBal.current = async () => {
+    if (!pk) return;
+    try {
+      const lamports = await connection.getBalance(pk);
+      let usdStr: string | null = null;
+      if (payMint) {
+        try { usdStr = usd((await connection.getTokenAccountBalance(getAssociatedTokenAddressSync(payMint, pk))).value.amount); }
+        catch (e: any) { if (/could not find account|invalid param/i.test(e?.message ?? "")) usdStr = usd(0); else throw e; }
+      }
+      setBal({ sol: lamports / 1e9, usd: usdStr });
+    } catch { setBal("error"); }
+  };
+  useEffect(() => { setBal(null); refreshBal.current(); }, [pk, payMintStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
   async function run(text: string, build: () => Promise<TransactionInstruction[]>, ev?: Row<EventAcc>): Promise<boolean> {
@@ -192,10 +227,17 @@ export default function App() {
     ];
   });
 
+  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query));
   const eventsView = !selEv ? (
     <section className={`${card} space-y-4`}>
       <h2 className="text-2xl font-bold">Events</h2>
-      {events === null ? (!loadErr && <p>Loading…</p>) : allEvents.length === 0 ? <p className="text-xl">No events yet.</p> : allEvents.map((ev) => (
+      <input type="search" className={input} placeholder="Search events" aria-label="Search events" value={query} onChange={(e) => setQuery(e.target.value)} />
+      {events === null ? (!loadErr && <p>Loading…</p>) : allEvents.length === 0 ? <p className="text-xl">No events yet.</p> : shown.length === 0 ? (
+        <div className="space-y-3">
+          <p className="text-xl">No events match &quot;{query.trim()}&quot;</p>
+          <button className={btn} onClick={() => setQuery("")}>Clear search</button>
+        </div>
+      ) : shown.map((ev) => (
         <button key={ev.publicKey.toBase58()} className="block w-full rounded-xl border border-white/10 p-4 text-left hover:bg-white/[0.06]" onClick={() => setSel(ev.publicKey.toBase58())}>
           <EventHead ev={ev} />
         </button>
@@ -305,9 +347,13 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="grad-text text-3xl font-extrabold sm:text-4xl">FaceValue</h1>
         <div className="flex flex-wrap items-center gap-3">
+          <ThemeToggle />
           {pk ? (
             <>
               <span className="text-base sm:text-lg">Email wallet {short(pk)}</span>
+              <span className="text-base text-zinc-400 sm:text-lg">
+                {bal === "error" ? "Balance unavailable" : bal ? `SOL ${bal.sol.toFixed(4)}${bal.usd ? ` · ${bal.usd}` : ""}` : "…"}
+              </span>
               <button className={btn} onClick={() => wallet.emailAuth?.logout()}>Sign out</button>
               <button className={btn} onClick={getFunds}>Get test funds</button>
             </>
@@ -334,7 +380,7 @@ export default function App() {
           {/* Phone: fixed bottom tab bar. md and up: left sidebar. */}
           <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-white/10 bg-[#0b0a12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:w-52 md:shrink-0 md:flex-col md:gap-2 md:border-0 md:bg-transparent md:pb-0">
             {NAV.map(([v, label]) => (
-              <button key={v} aria-current={view === v} className={`min-h-[56px] flex-1 px-2 text-base md:flex-none md:rounded-xl md:px-4 md:py-3 md:text-left md:text-lg ${view === v ? "font-semibold text-pink-300 md:grad md:text-black" : "text-zinc-400 md:border md:border-white/10 md:text-inherit md:hover:bg-white/[0.06]"}`}
+              <button key={v} aria-current={view === v ? "page" : undefined} className={`m-1 min-h-[48px] flex-1 rounded-xl px-2 text-base md:m-0 md:flex-none md:px-4 md:py-3 md:text-left md:text-lg ${view === v ? "grad font-bold text-black shadow-lg ring-2 ring-pink-400/70" : "border border-white/10 text-zinc-400 md:text-inherit md:hover:bg-white/[0.06]"}`}
                 onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
             ))}
           </nav>

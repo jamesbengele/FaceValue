@@ -16,3 +16,9 @@ export function parseName(raw: string): { name: string; startMs: number | null }
 }
 export const fmtStart = (ms: number | null) =>
   ms === null ? "Date to be announced" : new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+// Case-insensitive match on the event name and its displayed date; an empty query matches everything.
+export const matchesQuery = (raw: string, query: string) => {
+  const q = query.trim().toLowerCase();
+  const { name, startMs } = parseName(raw);
+  return !q || `${name} ${fmtStart(startMs)}`.toLowerCase().includes(q);
+};
