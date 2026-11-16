@@ -28,9 +28,9 @@ Tests mint their own token and fund wallets by transfer; no airdrops.
 ```bash
 cd app && npm install        # .npmrc sets legacy-peer-deps (Privy peer deps)
 npm run setup-demo           # creates a test mint only; copy it into app/.env.local as DEMO_MINT
-npm run dev                  # http://localhost:3000   (organizer view: ?organizer=1)
+npm run dev                  # http://localhost:3000   (sidebar: Events, My tickets, Host an event; ?organizer=1 opens Host)
 ```
-`app/.env.local`: `DEMO_MINT` (used by `/api/drip`); `NEXT_PUBLIC_PRIVY_APP_ID` is required (email is the only sign-in; without it the app shows only a setup notice, see [app/README-email.md](app/README-email.md)); `NEXT_PUBLIC_RPC_URL` should be a private devnet RPC, because the public one rate-limits with three windows; `NEXT_PUBLIC_EVENT_ADDRESS` is the default event for buyer windows. Wallets need a little devnet SOL for ticket-account rent and fees.
+`app/.env.local`: `DEMO_MINT` (used by `/api/drip`); `NEXT_PUBLIC_PRIVY_APP_ID` is required (email is the only sign-in; without it the app shows only a setup notice, see [app/README-email.md](app/README-email.md)); `NEXT_PUBLIC_RPC_URL` should be a private devnet RPC, because the public one rate-limits with three windows; `NEXT_PUBLIC_EVENT_ADDRESS` opens that event first (optional; all events are listed). Wallets need a little devnet SOL for ticket-account rent and fees.
 
 ## Limits to know
 - Gate codes last under ~90 s and defeat screenshots, not a holder forwarding a live code.
