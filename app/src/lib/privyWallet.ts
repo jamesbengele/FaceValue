@@ -4,7 +4,13 @@ import { useCallback, useMemo, useRef } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignMessage, useSignTransaction, useWallets } from "@privy-io/react-auth/solana";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
-import type { AppWallet } from "./useAppWallet";
+
+type Tx = Transaction | VersionedTransaction;
+export interface AppWallet {
+  publicKey: PublicKey | null;
+  signTransaction: (<T extends Tx>(tx: T) => Promise<T>) | undefined;
+  signMessage?: (msg: Uint8Array) => Promise<Uint8Array>;
+}
 
 export type EmailAuth = { ready: boolean; authenticated: boolean; login: () => void; logout: () => void };
 export type PrivySide = { wallet: AppWallet | null; auth: EmailAuth | null };
@@ -31,11 +37,6 @@ export function usePrivySide(): PrivySide {
     const { signedTransaction } = await signTransaction({ transaction: bytes, wallet: w, chain: "solana:devnet" });
     return (isV0 ? VersionedTransaction.deserialize(signedTransaction) : Transaction.from(signedTransaction)) as T;
   }, []);
-  const signAll = useCallback(async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => {
-    const out: T[] = [];
-    for (const t of txs) out.push(await signTx(t));
-    return out;
-  }, [signTx]);
   const signMsg = useCallback(async (message: Uint8Array) => {
     const { w, signMessage } = live.current;
     if (!w) throw new Error("Email wallet not ready");
@@ -45,12 +46,20 @@ export function usePrivySide(): PrivySide {
   const address = w?.address;
   const publicKey = useMemo(() => (address ? new PublicKey(address) : null), [address]);
   const wallet = useMemo<AppWallet | null>(
-    () => (authenticated && publicKey ? { publicKey, signTransaction: signTx, signAllTransactions: signAll, signMessage: signMsg, kind: "email" } : null),
-    [authenticated, publicKey, signTx, signAll, signMsg]
+    () => (authenticated && publicKey ? { publicKey, signTransaction: signTx, signMessage: signMsg } : null),
+    [authenticated, publicKey, signTx, signMsg]
   );
   const auth = useMemo<EmailAuth>(
     () => ({ ready, authenticated, login: () => login({ loginMethods: ["email"] }), logout: () => { logout(); } }),
     [ready, authenticated, login, logout]
   );
   return { wallet, auth };
+}
+
+// Email (Privy) is the only sign-in method; signed out means no publicKey and no signers.
+export function useAppWallet(): AppWallet & { emailAuth: EmailAuth | null } {
+  const { wallet, auth } = usePrivySide();
+  return wallet
+    ? { ...wallet, emailAuth: auth }
+    : { publicKey: null, signTransaction: undefined, emailAuth: auth };
 }

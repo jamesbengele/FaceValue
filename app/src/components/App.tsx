@@ -4,7 +4,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
-import { useAppWallet } from "@/lib/useAppWallet";
+import { useAppWallet } from "@/lib/privyWallet";
 import { EventAcc, Row, TicketAcc, eventPda, makeProgram, ticketPda } from "@/lib/program";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -42,7 +42,7 @@ export default function App() {
   const { connection } = useConnection();
   const wallet = useAppWallet();
   const pk = wallet.publicKey;
-  const program = useMemo(() => makeProgram(connection, wallet), [connection, wallet.publicKey, wallet.signTransaction, wallet.signAllTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const program = useMemo(() => makeProgram(connection), [connection]);
 
   const [organizerMode, setOrganizerMode] = useState(false);
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
@@ -67,8 +67,8 @@ export default function App() {
   // Email wallets start empty: fund once per address right after sign-in.
   const funded = useRef("");
   useEffect(() => {
-    if (wallet.kind === "email" && pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
-  }, [wallet.kind, pk, getFunds]);
+    if (pk && funded.current !== pk.toBase58()) { funded.current = pk.toBase58(); getFunds(); }
+  }, [pk, getFunds]);
 
   // `?event=<address>` pins one event (other runs on this program also create events); env var is the default pin.
   const [pinned, setPinned] = useState(EVENT_ADDRESS);
@@ -182,9 +182,9 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="grad-text text-4xl font-extrabold">FaceValue</h1>
         <div className="flex flex-wrap items-center gap-3">
-          {wallet.kind === "email" ? (
+          {pk ? (
             <>
-              <span className="text-lg">Email wallet {short(pk!)}</span>
+              <span className="text-lg">Email wallet {short(pk)}</span>
               <button className={btn} onClick={() => wallet.emailAuth?.logout()}>Sign out</button>
             </>
           ) : (
