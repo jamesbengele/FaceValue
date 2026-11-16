@@ -8,7 +8,7 @@ Features: USDC-style SPL token payments, organizer royalty on resales, rotating 
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `app/` Next.js app (IDL: `app/src/idl/facevalue.json`).
 
 ## Deployed
-Devnet program `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`. Test mint `AsTAYEnPr1vnwSUY1UiZuuS2fSw7F6qN3BUHNUGtUQw1` (our own, deployer is mint authority).
+Devnet program `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`. Test mint `4UDrCVHBaJRVYFVCfNjzjseJAgp25Kywz6qZBX3hAWd6` (our own, deployer is mint authority).
 
 ## Deploy your own copy (Solana Playground, Anchor 0.29)
 Local `cargo build-sbf` needs a C linker (MSVC build tools); on a machine with one it can be used instead.
