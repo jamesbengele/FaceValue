@@ -22,3 +22,10 @@ Brief: SPEC §7: gate.ts pure functions, signMessage in the wallet seam, holder 
 
 ## 4. Email sign-in (same subagent, resumed)
 Brief: Privy beside Phantom, env-gated on NEXT_PUBLIC_PRIVY_APP_ID, plugged into the `useAppWallet` seam, devnet-only `/api/drip`, README-email. Outcome: build passes with and without an App ID. What broke: the subagent truncated App.tsx mid-task and restored it from git, re-applying only its edits; Privy's optional peer deps need `--legacy-peer-deps` (added an app/.npmrc). Reviewed drip route by reading. No Privy flow run (no App ID).
+
+## 5. Audit fixes
+Brief: apply the 17-item audit of Nov 16 (commit 7e87e97) in ten ordered groups, one commit per group; no program or IDL changes (Group 10 needs a redeploy and was not started).
+What broke / was corrected:
+- Auto mode blocked stopping the `next dev` server on port 3000 (needed before `npm run build`); it ran until James approved it in the thread.
+- `README.md` line 8 first came out with a duplicated "Next.js app." after the IDL path edit; fixed before committing.
+- Not verified: the Privy confirm prompt (Group 7), and every email-signed-in flow in the app.

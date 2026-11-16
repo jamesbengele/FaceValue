@@ -4,7 +4,7 @@ export class SimError extends Error {
   constructor(public logs: string[], public err: unknown) { super("Transaction simulation failed"); }
 }
 export class NoTokenAccount extends Error {
-  constructor() { super("You have no test USDC. Ask the organizer to fund your wallet (fund-wallet script), then try again."); }
+  constructor() { super("You have no test USDC yet. Click Get test funds, then try again."); }
 }
 export type UiError = { kind: "face"; name: string; msg: string } | { kind: "fv"; name: string; msg: string } | { kind: "other"; msg: string };
 

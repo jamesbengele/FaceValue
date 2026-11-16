@@ -44,11 +44,11 @@ Run [`DEMO.md`](./DEMO.md) exactly. It's timed at ~90 seconds. The pause after t
 
 ## 2:30–3:00 · What's next (Partner B) · Slide 4 "Next"
 
-> "With one more week:
-> - **USDC instead of SOL**, so $50 always means $50.
-> - **A rotating QR code at the gate**, signed by the owner's wallet, so passing a ticket to a stranger off-platform gets risky.
-> - **Organizer royalties**: a small cut of each resale goes back to the student org.
-> - **Email sign-in** with embedded wallets, so no student ever sees a seed phrase.
+> "This week we also shipped USDC-style payments, so $50 always means $50, a rotating code at the gate signed by the owner's wallet, organizer royalties on every resale, and email sign-in with embedded wallets, so no student ever sees a seed phrase.
+>
+> What's next:
+> - **Fees paid for the student**, so they never hold SOL.
+> - **Real USDC through an on-ramp.**
 > - Per-wallet purchase limits to slow bots.
 >
 > Student orgs want their sections full of real fans. FaceValue makes the fair price the only price. Thank you."
@@ -65,8 +65,9 @@ Keep each answer to two sentences. Partner A takes "why" questions, Partner B ta
 |---|---|
 | **"Can't they just take extra cash on Venmo?"** | "Yes, and no code can stop money that moves off-chain. But our platform never *helps* anyone scalp the way StubHub profits from it, and the rotating gate QR makes handing a ticket to a stranger you don't trust risky." |
 | **"Why not just have Ticketmaster cap prices?"** | "Ticketmaster earns fees on resale, so it's not motivated to. And a cap on one site disappears the moment the ticket leaves it. Ours travels with the ticket." |
-| **"Why SOL and not dollars?"** | "Fastest path for the demo. The real version uses USDC, so prices are actually in dollars." |
-| **"What if students don't have wallets?"** | "Email-based embedded wallets mean no seed phrase. It's on the next-steps list." |
+| **"Is that real USDC?"** | "It's a test token shaped like USDC on devnet. The program stores the token on the event, so real USDC works with no code change." |
+| **"What if students don't have wallets?"** | "They sign in with email and get a wallet made for them. No extension, no seed phrase." |
+| **"Can't the seller and buyer add a side payment in the same transaction?"** | "Yes. Two people who agree in private can always pay each other, onchain or on Venmo. What the program removes is the public market above face: every listing anyone can see is at face or below, and anyone can take it." |
 | **"Who's the customer?"** | "Student orgs and campus venues issuing tickets. They want real fans in the seats, not scalper profits." |
 | **"Couldn't someone just transfer the NFT on another marketplace?"** | "That's exactly why it's not a normal NFT. The ticket is an account our program owns, and the only instruction that changes its owner enforces the cap." |
 | **"What stops a bot from buying them all at face?"** | "Today, nothing beyond supply. Per-wallet limits and verified student sign-in are next. But even if a bot buys, it can't profit, so the incentive is gone." |
@@ -75,5 +76,5 @@ Keep each answer to two sentences. Partner A takes "why" questions, Partner B ta
 ## Speaker reminders
 
 - Say **"the ticket refuses"**, not "the app shows an error." The rejection comes from the program on devnet, not the frontend.
-- Prices are shown as dollars at a demo rate (1 SOL = $1,000, so $50 = 0.05 devnet SOL). If anyone asks, say so plainly.
+- Prices are a USDC-style test token on devnet: $50 is 50 tokens. If anyone asks, say so plainly.
 - Be honest about limits (Venmo on the side). Judges reward it.
