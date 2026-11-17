@@ -66,7 +66,7 @@ PDAs: Event `["event", organizer, event_id.to_le_bytes()]`; Ticket `["ticket", e
 
 Errors: `PriceAboveFace, SoldOut, NotOwner, NotOrganizer, NotListed, TicketUsed, CannotBuyOwnTicket, InvalidPrice, NameTooLong, InvalidSupply, PriceChanged, InvalidRoyalty, InvalidTokenAccount, MathOverflow`.
 
-Deployed: devnet `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`, built in Solana Playground (Anchor 0.29, old-format IDL, so no `ctx.bumps`; bumps come from `find_program_address`).
+Deployed: devnet `9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2`, built in Solana Playground (Anchor 0.29, old-format IDL, so no `ctx.bumps`; bumps come from `find_program_address`).
 
 ### 4b. Fan loyalty and early access ("bots can buy tickets; they can't fake showing up")
 

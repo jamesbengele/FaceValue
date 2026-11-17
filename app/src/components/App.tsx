@@ -5,7 +5,7 @@ import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.j
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
-import { EventAcc, FanPassAcc, PresaleAcc, Row, TicketAcc, eventPda, fanPda, makeProgram, presalePda, ticketPda } from "@/lib/program";
+import { EventAcc, EventInfoAcc, FanPassAcc, PresaleAcc, Row, TicketAcc, eventPda, fanPda, infoPda, makeProgram, presalePda, ticketPda } from "@/lib/program";
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -78,6 +78,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const LABELS = {
   name: "Name", start: "Date and time", face: "Face price ($)", royalty: "Royalty (%)", supply: "Max supply", mint: "Payment token mint address",
+  venue: "Venue (optional)", description: "Description (optional)", image: "Image link, https://… (optional)",
   early: "Fans-only early access (minutes from now, 0 = off)", earlyMin: "Check-ins at your past events needed for early access",
 };
 type View = "events" | "tickets" | "host";
@@ -94,6 +95,8 @@ export default function App() {
   const [hostSel, setHostSel] = useState(""); // event open in Host ("" = newest of mine)
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
   const [tickets, setTickets] = useState<Row<TicketAcc>[]>([]);
+  const [infos, setInfos] = useState<Row<EventInfoAcc>[]>([]);
+  const [giveTo, setGiveTo] = useState<Record<string, string>>({});
   const [fanPasses, setFanPasses] = useState<Row<FanPassAcc>[]>([]);
   const [presales, setPresales] = useState<Row<PresaleAcc>[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -102,7 +105,7 @@ export default function App() {
   const [toast, setToast] = useState<{ sig: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1" });
+  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1", venue: "", description: "", image: "" });
 
   const [query, setQuery] = useState("");
   // Per-device hiding of old events; nothing onchain changes (SPEC §5).
@@ -162,6 +165,7 @@ export default function App() {
       };
       const orgs = [...new Set(evs.map((e) => e.account.organizer.toBase58()))].map((o) => new PublicKey(o));
       setPresales(await at<PresaleAcc>("presale", evs.map((e) => presalePda(e.publicKey))));
+      setInfos(await at<EventInfoAcc>("eventInfo", evs.map((e) => infoPda(e.publicKey))));
       setFanPasses(pk ? await at<FanPassAcc>("fanPass", orgs.map((o) => fanPda(o, pk))) : []);
     } catch { /* keep the last good values */ }
   }, [program, pk]);
@@ -278,6 +282,15 @@ export default function App() {
     return run("Event deleted", async () => [await program.methods.closeEvent().accounts({ organizer: need(), event: ev.publicKey }).instruction()]);
   };
 
+  const infoOf = (ev: Row<EventAcc>) => infos.find((i) => i.account.event.equals(ev.publicKey))?.account;
+
+  // Gift: the program refuses used or listed tickets; no payment, so there is no price to cap.
+  const give = (t: Row<TicketAcc>) => run("Ticket sent", async () => {
+    let to: PublicKey;
+    try { to = new PublicKey((giveTo[t.publicKey.toBase58()] ?? "").trim()); } catch { throw new Error("Paste your friend's wallet address (they find it at the top of My tickets)"); }
+    return [await program.methods.transferTicket().accounts({ owner: need(), ticket: t.publicKey, newOwner: to }).instruction()];
+  });
+
   const createEvent = () => run("Event created", async () => {
     const organizer = need();
     const mint = new PublicKey(form.mint.trim());
@@ -302,6 +315,10 @@ export default function App() {
     if (earlyMins > 0)
       ixs.push(await program.methods.setPresale(new BN(Math.floor(Date.now() / 1000 + earlyMins * 60)), earlyMin)
         .accounts({ organizer, event, presale: presalePda(event), systemProgram: SystemProgram.programId }).instruction());
+    // Details are optional; they live in a separate account so events without them keep working.
+    if (form.venue || form.description || form.image)
+      ixs.push(await program.methods.setEventInfo(new BN(Math.floor((startMs ?? Date.now()) / 1000)), form.venue, form.description, form.image)
+        .accounts({ organizer, event, info: infoPda(event), systemProgram: SystemProgram.programId }).instruction());
     return ixs;
   });
 
@@ -333,6 +350,13 @@ export default function App() {
       <section className={`${card} space-y-3`}>
         <button className="text-zinc-400 underline" onClick={() => setSel("")}>← All events</button>
         <EventHead ev={selEv} big />
+        {(() => { const i = infoOf(selEv); return i && (
+          <div className="space-y-2">
+            {/^https?:\/\//.test(i.imageUrl) && <img src={i.imageUrl} alt="" className="max-h-64 w-full rounded-xl object-cover" />}
+            {i.venue && <div className="text-lg text-zinc-300">📍 {i.venue}</div>}
+            {i.description && <p className="whitespace-pre-line text-zinc-300">{i.description}</p>}
+          </div>
+        ); })()}
         <button className="text-base text-zinc-400 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link to this event</button>
         {(() => {
           const early = earlyOf(selEv), n = attendedWith(selEv.account.organizer);
@@ -402,6 +426,7 @@ export default function App() {
     </section>
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
+      {pk && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
       {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
         const ts = mine.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
@@ -434,6 +459,12 @@ export default function App() {
                   </>
                 )}
                 {t.account.listed && <button className={btn} disabled={busy} onClick={() => cancel(t)}>Cancel listing</button>}
+                {!t.account.listed && (
+                  <div className="flex w-full flex-wrap items-center gap-3">
+                    <input className={`${input} !w-72 max-w-full`} placeholder="Friend's wallet address" value={giveTo[key] ?? ""} onChange={(e) => setGiveTo({ ...giveTo, [key]: e.target.value })} />
+                    <button className={btn} disabled={busy || !giveTo[key]} onClick={() => give(t)}>Send to a friend</button>
+                  </div>
+                )}
               </div>
             )}
           </div>

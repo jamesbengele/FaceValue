@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G");
+declare_id!("9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2");
 
 #[program]
 pub mod facevalue {
