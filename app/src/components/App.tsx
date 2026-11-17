@@ -329,6 +329,7 @@ export default function App() {
       <section className={`${card} space-y-3`}>
         <button className="text-zinc-400 underline" onClick={() => setSel("")}>← All events</button>
         <EventHead ev={selEv} big />
+        <button className="text-base text-zinc-400 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link to this event</button>
         {(() => {
           const early = earlyOf(selEv), n = attendedWith(selEv.account.organizer);
           return (
@@ -398,14 +399,14 @@ export default function App() {
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
-      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).map((ev) => {
+      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
         const ts = mine.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
         const m = parseName(ev.account.name);
         return (
-          <div key={ev.publicKey.toBase58()} className="space-y-4 rounded-xl border border-white/10 p-4">
+          <div key={ev.publicKey.toBase58()} className={`space-y-4 rounded-xl border border-white/10 p-4 ${isPast(ev) ? "opacity-70" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-xl font-semibold">{m.name}</div>
+                <div className="text-xl font-semibold">{m.name}{isPast(ev) && <span className="ml-2 rounded-full bg-zinc-500/20 px-3 py-1 text-base font-normal text-zinc-300">Ended</span>}</div>
                 <div className="text-zinc-400">{fmtStart(m.startMs)}</div>
               </div>
               <span className="rounded-full border border-white/15 px-3 py-1 text-base">{plural(ts.length, "ticket")}</span>
