@@ -95,7 +95,7 @@ describe("facevalue", function () {
   before(async () => {
     const tx = new Transaction();
     for (const w of [organizer, A, B, C])
-      tx.add(SystemProgram.transfer({ fromPubkey: deployer.publicKey, toPubkey: w.publicKey, lamports: 50_000_000 }));
+      tx.add(SystemProgram.transfer({ fromPubkey: deployer.publicKey, toPubkey: w.publicKey, lamports: 120_000_000 }));
     await sendAndConfirmTransaction(connection, tx, [deployer]);
 
     mint = await createMint(connection, deployer, deployer.publicKey, null, 6);
@@ -105,7 +105,7 @@ describe("facevalue", function () {
     bTok = await createAssociatedTokenAccount(connection, deployer, mint, B.publicKey);
     cTok = await createAssociatedTokenAccount(connection, deployer, mint, C.publicKey);
     bOtherTok = await createAssociatedTokenAccount(connection, deployer, otherMint, B.publicKey);
-    await mintTo(connection, deployer, mint, aTok, deployer, 200_000_000);
+    await mintTo(connection, deployer, mint, aTok, deployer, 500_000_000);
     await mintTo(connection, deployer, mint, bTok, deployer, 200_000_000);
     await mintTo(connection, deployer, mint, cTok, deployer, 100_000_000);
     await mintTo(connection, deployer, otherMint, bOtherTok, deployer, 100_000_000);
@@ -217,7 +217,7 @@ describe("facevalue", function () {
     const t1 = await buy(B, bTok, ev); // B's second ticket at the same event
     await checkIn(organizer, ev, t1);
     assert.equal(await attended(B.publicKey), 1);
-    e2 = await createEvt(eventId + 4, "Second Night", FACE, 0, 2);
+    e2 = await createEvt(eventId + 9, "Second Night", FACE, 0, 2);
     await checkIn(organizer, e2, await buy(B, bTok, e2));
     const pass = await p.account.fanPass.fetch(fanPda(organizer.publicKey, B.publicKey));
     assert.equal(pass.attended, 2);
