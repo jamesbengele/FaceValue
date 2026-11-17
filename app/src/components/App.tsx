@@ -63,11 +63,16 @@ function EventHead({ ev, big, early }: { ev: Row<EventAcc>; big?: boolean; early
       <div className={big ? "text-2xl font-bold" : "text-xl font-semibold"}>{m.name}</div>
       <div className="text-zinc-300">{fmtStart(m.startMs)}</div>
       <div className="text-zinc-400">Face price {usd(ev.account.facePrice)} · {ev.account.sold} of {ev.account.maxSupply} sold</div>
+      {soldOut(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-rose-500/20 px-3 py-1 text-base text-rose-200">Sold out</span>}
+      {isPast(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-zinc-500/20 px-3 py-1 text-base text-zinc-300">Ended</span>}
       {early && <div className="mt-1 inline-block rounded-full bg-amber-400/20 px-3 py-1 text-base text-amber-200">🎟️ Fans-only early access until {fmtTime(early)}</div>}
     </div>
   );
 }
 
+const soldOut = (ev: Row<EventAcc>) => ev.account.sold >= ev.account.maxSupply;
+// An event with no date is never "ended".
+const isPast = (ev: Row<EventAcc>) => { const t = parseName(ev.account.name).startMs; return t !== null && t < Date.now(); };
 const fmtTime = (p: PresaleAcc) => new Date(p.endsAt.toNumber() * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -101,6 +106,7 @@ export default function App() {
 
   const [query, setQuery] = useState("");
   // Per-device hiding of old events; nothing onchain changes (SPEC §5).
+  const [qty, setQty] = useState(1);
   const [hidden, setHidden] = useState<string[]>([]);
   const [showHidden, setShowHidden] = useState(false);
   useEffect(() => { try { setHidden(JSON.parse(localStorage.getItem("hiddenEvents") || "[]")); } catch {} }, []);
@@ -221,15 +227,16 @@ export default function App() {
   }
   const need = () => { if (!pk) throw new Error("Connect your wallet first"); return pk; };
 
-  const buyTicket = (ev: Row<EventAcc>) => run("Ticket bought", async () => {
+  const buyTicket = (ev: Row<EventAcc>, n = 1) => run(n > 1 ? `${n} tickets bought` : "Ticket bought", async () => {
     const buyer = need(); const e = ev.publicKey;
     const buyerToken = await buyerAta(ev.account.mint);
     const fresh: any = await (program.account as any).event.fetch(e);
-    return [await program.methods.buyTicket().accounts({
-      buyer, event: e, ticket: ticketPda(e, fresh.sold), buyerToken, treasury: ev.account.treasury,
+    // Several tickets go in one transaction, so it is all or nothing; ticket ids follow `sold`.
+    return Promise.all(Array.from({ length: n }, (_, i) => program.methods.buyTicket().accounts({
+      buyer, event: e, ticket: ticketPda(e, fresh.sold + i), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
       presale: presalePda(e), fanPass: fanPda(ev.account.organizer, buyer),
-    }).instruction()];
+    }).instruction()));
   }, ev);
 
   const list = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Ticket listed", async () => {
@@ -326,6 +333,7 @@ export default function App() {
       <section className={`${card} space-y-3`}>
         <button className="text-zinc-400 underline" onClick={() => setSel("")}>← All events</button>
         <EventHead ev={selEv} big />
+        <button className="text-base text-zinc-400 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link to this event</button>
         {(() => {
           const early = earlyOf(selEv), n = attendedWith(selEv.account.organizer);
           return (
@@ -340,7 +348,18 @@ export default function App() {
             </>
           );
         })()}
-        <button className={btn} disabled={busy} onClick={() => buyTicket(selEv)}>Buy ticket · {usd(selEv.account.facePrice)}</button>
+        {!soldOut(selEv) && !isPast(selEv) && (() => {
+          const max = Math.min(4, selEv.account.maxSupply - selEv.account.sold), n = Math.min(qty, max);
+          return (
+            <label className="flex items-center gap-3 text-lg">Tickets
+              <select className={input} style={{ width: "auto" }} value={n} onChange={(e) => setQty(Number(e.target.value))}>
+                {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+              </select>
+              <span className="text-zinc-400">Total {usd(selEv.account.facePrice.muln(n))}</span>
+            </label>
+          );
+        })()}
+        <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv, Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold))}>{soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : `Buy ${Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) > 1 ? Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) + " tickets" : "ticket"} · ${usd(selEv.account.facePrice.muln(Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold)))}`}</button>
       </section>
       <section className={`${card} space-y-4`}>
         <h2 className="text-2xl font-bold">Resale market</h2>
@@ -384,14 +403,14 @@ export default function App() {
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
-      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).map((ev) => {
+      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
         const ts = mine.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
         const m = parseName(ev.account.name);
         return (
-          <div key={ev.publicKey.toBase58()} className="space-y-4 rounded-xl border border-white/10 p-4">
+          <div key={ev.publicKey.toBase58()} className={`space-y-4 rounded-xl border border-white/10 p-4 ${isPast(ev) ? "opacity-70" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-xl font-semibold">{m.name}</div>
+                <div className="text-xl font-semibold">{m.name}{isPast(ev) && <span className="ml-2 rounded-full bg-zinc-500/20 px-3 py-1 text-base font-normal text-zinc-300">Ended</span>}</div>
                 <div className="text-zinc-400">{fmtStart(m.startMs)}</div>
               </div>
               <span className="rounded-full border border-white/15 px-3 py-1 text-base">{plural(ts.length, "ticket")}</span>
@@ -456,6 +475,18 @@ export default function App() {
       {hostEv && (
         <section className={`${card} space-y-3`}>
           <h2 className="text-2xl font-bold">Tickets · {parseName(hostEv.account.name).name}</h2>
+          {(() => {
+            const ts = ticketsOf(hostEv), n = hostEv.account.sold;
+            const stat = (label: string, v: string | number) => <div className="rounded-xl border border-white/10 p-3"><div className="text-2xl font-bold">{v}</div><div className="text-base text-zinc-400">{label}</div></div>;
+            return (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {stat("Sold", `${n} / ${hostEv.account.maxSupply}`)}
+                {stat("Ticket sales", usd(hostEv.account.facePrice.muln(n)))}
+                {stat("Checked in", ts.filter((t) => t.account.used).length)}
+                {stat("Listed for resale", ts.filter((t) => t.account.listed).length)}
+              </div>
+            );
+          })()}
           {ticketsOf(hostEv).length === 0 && <p className="text-zinc-400">No tickets sold yet.</p>}
           {ticketsOf(hostEv).map((t) => (
             <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
