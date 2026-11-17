@@ -75,9 +75,9 @@ const resale = (who: Keypair, e: PublicKey, t: PublicKey, sellerTok: PublicKey, 
     .signers([who]).rpc();
 
 // fan_pass is derived from the event's real organizer, so a wrong signer still reaches NotOrganizer.
-async function checkIn(who: Keypair, e: PublicKey, t: PublicKey) {
+async function checkIn(who: Keypair, e: PublicKey, t: PublicKey, expected?: PublicKey) {
   const fan = (await p.account.ticket.fetch(t)).owner;
-  return p.methods.checkIn()
+  return p.methods.checkIn(expected ?? fan)
     .accounts({ organizer: who.publicKey, event: e, ticket: t, fanPass: fanPda(organizer.publicKey, fan), systemProgram: SystemProgram.programId })
     .signers([who]).rpc();
 }
@@ -235,5 +235,24 @@ describe("facevalue", function () {
     const t = await buy(B, bTok, pe);
     assert.equal((await p.account.ticket.fetch(t)).owner.toBase58(), B.publicKey.toBase58());
     await expectErr("SalesStarted", setPresale(organizer, e2, endsAt, 1));
+  });
+
+  it("13. check_in names the owner the gate saw -> OwnerChanged", async () => {
+    const e = await createEvt(eventId + 6, "Gate Race", FACE, 0, 1);
+    const t = await buy(A, aTok, e);
+    await expectErr("OwnerChanged", checkIn(organizer, e, t, B.publicKey));
+    assert.isFalse((await p.account.ticket.fetch(t)).used);
+    await checkIn(organizer, e, t, A.publicKey);
+    assert.isTrue((await p.account.ticket.fetch(t)).used);
+  });
+
+  it("14. close_event: organizer only, only with nothing sold", async () => {
+    const close = (who: Keypair, e: PublicKey) =>
+      p.methods.closeEvent().accounts({ organizer: who.publicKey, event: e }).signers([who]).rpc();
+    const empty = await createEvt(eventId + 7, "Delete Me", FACE, 0, 1);
+    await expectErr("NotOrganizer", close(A, empty));
+    await close(organizer, empty);
+    assert.isNull(await p.account.event.fetchNullable(empty));
+    await expectErr("EventHasTickets", close(organizer, ev)); // ev has sold tickets
   });
 });

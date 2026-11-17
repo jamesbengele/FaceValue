@@ -161,8 +161,10 @@ pub mod facevalue {
         Ok(())
     }
 
-    pub fn check_in(ctx: Context<CheckIn>) -> Result<()> {
+    pub fn check_in(ctx: Context<CheckIn>, expected_owner: Pubkey) -> Result<()> {
         require!(!ctx.accounts.ticket.used, FaceValueError::TicketUsed);
+        // The gate verified this wallet; a resale since then must not use up the buyer's ticket.
+        require!(ctx.accounts.ticket.owner == expected_owner, FaceValueError::OwnerChanged);
         let ticket = &mut ctx.accounts.ticket;
         ticket.used = true;
         ticket.listed = false;
@@ -197,6 +199,12 @@ pub mod facevalue {
         }
         let mut data = pass_ai.try_borrow_mut_data()?;
         pass.try_serialize(&mut &mut data[..])?;
+        Ok(())
+    }
+
+    // Organizer-only, and only while nothing is sold, so no holder can lose a ticket.
+    // Rent goes back to the organizer. A presale account, if any, stays as a small orphan.
+    pub fn close_event(_ctx: Context<CloseEvent>) -> Result<()> {
         Ok(())
     }
 
@@ -404,6 +412,19 @@ pub struct CheckIn<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CloseEvent<'info> {
+    #[account(mut)]
+    pub organizer: Signer<'info>,
+    #[account(
+        mut,
+        close = organizer,
+        constraint = event.organizer == organizer.key() @ FaceValueError::NotOrganizer,
+        constraint = event.sold == 0 @ FaceValueError::EventHasTickets
+    )]
+    pub event: Account<'info, Event>,
+}
+
+#[derive(Accounts)]
 pub struct SetPresale<'info> {
     #[account(mut)]
     pub organizer: Signer<'info>,
@@ -505,4 +526,8 @@ pub enum FaceValueError {
     SalesStarted,
     #[msg("Early access needs a future end time and at least 1 check-in")]
     InvalidPresale,
+    #[msg("The ticket changed hands since it was scanned; scan again")]
+    OwnerChanged,
+    #[msg("Tickets are already sold, so this event can't be deleted")]
+    EventHasTickets,
 }

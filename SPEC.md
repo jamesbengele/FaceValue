@@ -57,7 +57,8 @@ PDAs: Event `["event", organizer, event_id.to_le_bytes()]`; Ticket `["ticket", e
 | 3 | `list_ticket(price)` | owner | `listed = true`, `ask_price = price` | **`price > face_price` → `PriceAboveFace`** · signer ≠ owner → `NotOwner` · used → `TicketUsed` · price = 0 → `InvalidPrice` |
 | 4 | `cancel_listing()` | owner | `listed = false`, `ask_price = 0` | signer ≠ owner → `NotOwner` |
 | 5 | `buy_resale(max_price)` | buyer | Atomically: `royalty = ask * royalty_bps / 10_000` (floor, checked math); buyer_token → treasury `royalty`; buyer_token → seller_token `ask − royalty`; `owner = buyer`, `listed = false`, `ask_price = 0` | not listed → `NotListed` · buyer == owner → `CannotBuyOwnTicket` · used → `TicketUsed` · `ask_price > max_price` → `PriceChanged` · `ask_price > face_price` → `PriceAboveFace` (belt and suspenders) · seller_token not (mint = `event.mint`, owner = `ticket.owner`), buyer_token wrong, or treasury ≠ `event.treasury` → `InvalidTokenAccount` |
-| 6 | `check_in()` | organizer | `used = true`, `listed = false` | signer ≠ `event.organizer` → `NotOrganizer` · used → `TicketUsed` |
+| 6 | `check_in(expected_owner)` | organizer | `used = true`, `listed = false` | signer ≠ `event.organizer` → `NotOrganizer` · used → `TicketUsed` · `ticket.owner ≠ expected_owner` → `OwnerChanged` (the owner the gate verified; see §7) |
+| 8 | `close_event()` | organizer | Closes the Event account and returns its rent to the organizer | signer ≠ `event.organizer` → `NotOrganizer` · `sold > 0` → `EventHasTickets` |
 
 **The cap:** `require!(price <= ctx.accounts.event.face_price, FaceValueError::PriceAboveFace);`
 
@@ -81,11 +82,11 @@ pub struct Presale { event: Pubkey, ends_at: i64, min_attended: u32, bump: u8 } 
 | # | Instruction | Signer | Effect | Rejects |
 |---|---|---|---|---|
 | 2' | `buy_ticket()` + accounts `presale`, `fan_pass` (seeds-checked, may not exist) | buyer | If a Presale exists and `now < ends_at`: the buyer's FanPass must exist with `attended >= min_attended` | otherwise → `PresaleFansOnly` |
-| 6' | `check_in()` + accounts `fan_pass` (mut, seeds `["fan", event.organizer, ticket.owner]`), `system_program`; `organizer` becomes `mut` (pays the FanPass rent) | organizer | Creates the FanPass on a fan's first check-in (transfer/allocate/assign, so a pre-funded address can't block it). `attended += 1` only if `last_event != event` (several tickets at one event count once), then `last_event = event` | as before |
+| 6' | `check_in(expected_owner)` + accounts `fan_pass` (mut, seeds `["fan", event.organizer, ticket.owner]`), `system_program`; `organizer` becomes `mut` (pays the FanPass rent) | organizer | Creates the FanPass on a fan's first check-in (transfer/allocate/assign, so a pre-funded address can't block it). `attended += 1` only if `last_event != event` (several tickets at one event count once), then `last_event = event` | as before |
 | 7 | `set_presale(ends_at, min_attended)` | organizer | Creates Presale for an event | signer ≠ organizer → `NotOrganizer` · `sold > 0` → `SalesStarted` · `min_attended == 0` or `ends_at <= now` → `InvalidPresale` |
 
 - **Backward compatible:** `Event` and `Ticket` are unchanged, and the new accounts are appended at the end of `BuyTicket` and `CheckIn`, so the deployed (old) program ignores them as remaining accounts. The updated app keeps working before the redeploy; only `set_presale` needs the new program.
-- New errors are appended after `MathOverflow`: `PresaleFansOnly, SalesStarted, InvalidPresale`.
+- New errors are appended after `MathOverflow`: `PresaleFansOnly, SalesStarted, InvalidPresale`, then `OwnerChanged, EventHasTickets` (the upgrade in §11).
 - Known limits: early access doesn't cap tickets per fan; a fan who resells a presale ticket is still capped at face.
 
 ### Tests (TypeScript, run against devnet; mocha)
@@ -113,6 +114,7 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 - **Grouped by price:** the Resale market shows one row per price, cheapest first ("$45.00 · 3 available · Buy 1"). Buy takes the first ticket at that price; if another buyer got it first, the app tries the next one at the same price. My tickets groups by event ("2 tickets"), and each ticket keeps its own gate code, listing and status.
 - **Fan record:** event detail and My tickets show the signed-in wallet's check-ins with that organizer, read from its FanPass. During an event's early-access window the event shows "Early access for fans with N+ check-ins until <time>" and whether the user qualifies; the program enforces it. Create event has an optional early-access window (minutes) and minimum check-ins, sent as `set_presale` in the same transaction.
 - **Hide event (this device only):** each event card on Events has a Hide button. Hidden ids are kept in localStorage; "Show hidden (n)" brings them back. It changes nothing onchain and is for other organizers' old test events, which no one but their organizer can delete.
+- **Delete event:** Host, for the selected event, shows **Delete event** only when `sold == 0` (with a confirm step). It sends `close_event` and the organizer gets the rent back. An event with sold tickets can't be deleted, so a holder never loses a ticket; the Host view says so. Needs the §11 upgrade.
 - **App icon:** `app/public/icons/icon-{180,192,512}.png` (white "F" on the violet → pink → amber gradient) are used by the manifest and the iPhone home-screen icon. Plain PNGs written once with a small node script (no dependency); `next/og` was not used because it crashes the dev server on Windows paths containing spaces.
 - Every success toast links to Solana Explorer (`?cluster=devnet`). Dark premium look, violet → pink → amber gradient, base font ≥ 18px.
 - USDC amounts shown as `$` with 2 decimals.
@@ -125,7 +127,7 @@ Buy ($50) → list at $80 blocked → list at $50 → buyer buys (seller gets $5
 2. An ephemeral ed25519 key (tweetnacl, memory only) signs `ticket:<pda>.window:<floor(unix/30)>` every 30 s; the QR/text code is base64url JSON `{t, w, k, e, s, n, g}` (ticket, wallet, ephemeral key, expiry, wallet sig, window, ephemeral sig) and refreshes each window.
 3. The gate (organizer page) accepts a camera scan (BarcodeDetector if the browser has it) **or pasted text**. It verifies both signatures, `e` unexpired and at most 15 min ahead (plus 60 s for clock drift), `n` within ±1 window of now, the origin, then **re-fetches the ticket onchain**: `ticket.owner == w`, not used, not listed for resale, and the ticket's event is the one on the organizer's screen. Only then it sends `check_in`.
 Limit, stated plainly: a code is valid for under ~90 s and can be forwarded live to a stranger; it defeats screenshots, not a holder who cooperates in real time.
-Known gap: `check_in` does not name the owner the gate verified, so a resale that lands between the gate's read and `check_in` leaves the buyer with a used ticket. Refusing listed tickets narrows this. Closing it needs `check_in(expected_owner)` in the program.
+The gate passes the verified wallet `w` to `check_in(expected_owner)`; if the ticket was resold in between, the program rejects it with `OwnerChanged` and the buyer keeps an unused ticket. A listed ticket can therefore be checked in (this also clears the listing). Until the program upgrade in §11 is live, the gate refuses listed tickets instead, which narrows the race but does not close it.
 
 ## 8. Email sign-in (Privy)
 `@privy-io/react-auth` with `loginMethods: ['email']`, `embeddedWallets.solana createOnLogin: 'all-users'`. Needs `NEXT_PUBLIC_PRIVY_APP_ID` (user creates the Privy app). Email wallets need SOL for rent/fees, a USDC token account and test USDC: a devnet-only `/api/drip` route (server key from env) sends a small SOL top-up and mints test USDC when the wallet is below a threshold. A real launch needs fee sponsorship (a paymaster/relayer), real USDC via on-ramp, and auth/rate-limits on that route.
@@ -136,10 +138,17 @@ Wallet confirmation prompts stay on (`showWalletUIs: true`), so a successful buy
 **Search:** the Events list has a client-side "Search events" box (case-insensitive match on name and date text).
 
 ## 9. Out of scope
-Per-wallet limits (including during early access), discounts for fans, loyalty shared across organizers, cap above face, event search or filters, a date field in the program.
+Deleting an event that has sold tickets, and deleting events of other organizers; per-wallet limits (including during early access), discounts for fans, loyalty shared across organizers, cap above face, event search or filters, a date field in the program.
 
 ## 10. Repo layout
 ```
 SPEC.md  README.md  PROMPTS.md  docs/{DEMO,PITCH}.md
 program/  src/lib.rs  tests/  package.json     app/  src/idl/facevalue.json   (no Cargo.toml: built in Playground)
 ```
+
+## 11. Program upgrade: check-in guard and event delete
+One upgrade to the existing program ID, **account layouts unchanged** (existing events and tickets keep working):
+- `check_in(expected_owner: Pubkey)` fails with `OwnerChanged` if the ticket's owner changed since the gate verified it.
+- `close_event()` (§3 row 8): organizer-only, only while `sold == 0`. An early-access window account (`presale`) the event may have is not closed and stays as a small orphan. Event ids are timestamps, so it is never reused.
+- Not included: removing the unused `bump` fields. It would change every account's size and decoding for 1 byte each, for no behaviour.
+- The same upgrade also deploys the loyalty code of §4b (`set_presale`, `FanPass`), which was committed but not yet deployed. The app keeps the old `check_in()` call until the upgrade is live; then Gate drops the listed-ticket refusal.

@@ -257,15 +257,19 @@ export default function App() {
     }).instruction()];
   }, ev);
 
-  // fan_pass belongs to whoever owns the ticket right now, so read the owner fresh.
-  async function checkInIx(event: PublicKey, ticket: PublicKey) {
+  // `owner` is who the organizer saw holding the ticket; the program rejects the check-in (OwnerChanged) if it was resold since.
+  async function checkInIx(event: PublicKey, ticket: PublicKey, owner: PublicKey) {
     const organizer = need();
-    const t = (await (program.account as any).ticket.fetch(ticket)) as TicketAcc;
-    return program.methods.checkIn().accounts({
-      organizer, event, ticket, fanPass: fanPda(organizer, t.owner), systemProgram: SystemProgram.programId,
+    return program.methods.checkIn(owner).accounts({
+      organizer, event, ticket, fanPass: fanPda(organizer, owner), systemProgram: SystemProgram.programId,
     }).instruction();
   }
-  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () => [await checkInIx(ev.publicKey, t.publicKey)]);
+  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () => [await checkInIx(ev.publicKey, t.publicKey, t.account.owner)]);
+
+  const deleteEvent = (ev: Row<EventAcc>) => {
+    if (!window.confirm(`Delete "${parseName(ev.account.name).name}"? This can't be undone.`)) return;
+    return run("Event deleted", async () => [await program.methods.closeEvent().accounts({ organizer: need(), event: ev.publicKey }).instruction()]);
+  };
 
   const createEvent = () => run("Event created", async () => {
     const organizer = need();
@@ -445,6 +449,9 @@ export default function App() {
           </button>
         ))}
         {hostEv && <p className="break-all text-base text-zinc-400">Link for buyers: <code>?event={hostEv.publicKey.toBase58()}</code></p>}
+        {hostEv && (hostEv.account.sold === 0
+          ? <button className={btn} disabled={busy} onClick={() => deleteEvent(hostEv)}>Delete event</button>
+          : <p className="text-base text-zinc-400">Tickets are sold, so this event can&apos;t be deleted.</p>)}
       </section>
       {hostEv && (
         <section className={`${card} space-y-3`}>
@@ -454,12 +461,12 @@ export default function App() {
             <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xl">Ticket #{t.account.ticketId} · {short(t.account.owner)}</span>
               <Pill t={t.account} />
-              {!t.account.used && !t.account.listed && <button className={btn} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
+              {!t.account.used && <button className={btn} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
             </div>
           ))}
         </section>
       )}
-      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket)])} />
+      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket, t.owner)])} />
     </>
   );
 

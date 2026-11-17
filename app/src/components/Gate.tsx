@@ -7,7 +7,7 @@ const btn = "grad rounded-xl px-6 py-3 text-lg font-semibold text-black disabled
 
 type Props = {
   program: any; pk: PublicKey | null; eventKey: PublicKey | undefined; busy: boolean;
-  checkIn: (t: { event: PublicKey; ticket: PublicKey }) => Promise<boolean>;
+  checkIn: (t: { event: PublicKey; ticket: PublicKey; owner: PublicKey }) => Promise<boolean>;
 };
 
 export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
@@ -33,9 +33,8 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
       if (t.owner.toBase58() !== v.wallet) return fail("Wrong owner now: this wallet no longer holds the ticket");
       if (t.used) return fail("Ticket already used");
       if (!eventKey || !t.event.equals(eventKey)) return fail("This ticket is for another event");
-      // shortcut: refusing listed tickets narrows the sold-during-check-in race, it does not close it; closing it needs check_in(expected_owner) in the program (SPEC §7).
-      if (t.listed) return fail("This ticket is listed for resale. Ask the holder to cancel the listing, then scan again.");
-      if (await checkIn({ event: t.event, ticket: ticketKey })) { setResult({ ok: true, text: `Valid: ticket #${t.ticketId} checked in` }); setText(""); }
+      // The program re-checks the owner (OwnerChanged), so a resale after this read can't use up the buyer's ticket.
+      if (await checkIn({ event: t.event, ticket: ticketKey, owner: t.owner })) { setResult({ ok: true, text: `Valid: ticket #${t.ticketId} checked in` }); setText(""); }
       else fail("Check-in was not sent (see the error above)");
     } catch (e: any) { fail(e?.message ?? String(e)); }
   }
