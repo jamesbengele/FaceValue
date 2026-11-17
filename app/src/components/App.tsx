@@ -63,11 +63,16 @@ function EventHead({ ev, big, early }: { ev: Row<EventAcc>; big?: boolean; early
       <div className={big ? "text-2xl font-bold" : "text-xl font-semibold"}>{m.name}</div>
       <div className="text-zinc-300">{fmtStart(m.startMs)}</div>
       <div className="text-zinc-400">Face price {usd(ev.account.facePrice)} · {ev.account.sold} of {ev.account.maxSupply} sold</div>
+      {soldOut(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-rose-500/20 px-3 py-1 text-base text-rose-200">Sold out</span>}
+      {isPast(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-zinc-500/20 px-3 py-1 text-base text-zinc-300">Ended</span>}
       {early && <div className="mt-1 inline-block rounded-full bg-amber-400/20 px-3 py-1 text-base text-amber-200">🎟️ Fans-only early access until {fmtTime(early)}</div>}
     </div>
   );
 }
 
+const soldOut = (ev: Row<EventAcc>) => ev.account.sold >= ev.account.maxSupply;
+// An event with no date is never "ended".
+const isPast = (ev: Row<EventAcc>) => { const t = parseName(ev.account.name).startMs; return t !== null && t < Date.now(); };
 const fmtTime = (p: PresaleAcc) => new Date(p.endsAt.toNumber() * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -336,7 +341,7 @@ export default function App() {
             </>
           );
         })()}
-        <button className={btn} disabled={busy} onClick={() => buyTicket(selEv)}>Buy ticket · {usd(selEv.account.facePrice)}</button>
+        <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv)}>{soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : `Buy ticket · ${usd(selEv.account.facePrice)}`}</button>
       </section>
       <section className={`${card} space-y-4`}>
         <h2 className="text-2xl font-bold">Resale market</h2>
@@ -449,6 +454,18 @@ export default function App() {
       {hostEv && (
         <section className={`${card} space-y-3`}>
           <h2 className="text-2xl font-bold">Tickets · {parseName(hostEv.account.name).name}</h2>
+          {(() => {
+            const ts = ticketsOf(hostEv), n = hostEv.account.sold;
+            const stat = (label: string, v: string | number) => <div className="rounded-xl border border-white/10 p-3"><div className="text-2xl font-bold">{v}</div><div className="text-base text-zinc-400">{label}</div></div>;
+            return (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {stat("Sold", `${n} / ${hostEv.account.maxSupply}`)}
+                {stat("Ticket sales", usd(hostEv.account.facePrice.muln(n)))}
+                {stat("Checked in", ts.filter((t) => t.account.used).length)}
+                {stat("Listed for resale", ts.filter((t) => t.account.listed).length)}
+              </div>
+            );
+          })()}
           {ticketsOf(hostEv).length === 0 && <p className="text-zinc-400">No tickets sold yet.</p>}
           {ticketsOf(hostEv).map((t) => (
             <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
