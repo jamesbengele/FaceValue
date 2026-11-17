@@ -4,3 +4,4 @@ target/
 .next/
 .env*
 test-ledger/
+!.env.example
