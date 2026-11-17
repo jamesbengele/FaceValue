@@ -106,6 +106,7 @@ export default function App() {
 
   const [query, setQuery] = useState("");
   // Per-device hiding of old events; nothing onchain changes (SPEC §5).
+  const [qty, setQty] = useState(1);
   const [hidden, setHidden] = useState<string[]>([]);
   const [showHidden, setShowHidden] = useState(false);
   useEffect(() => { try { setHidden(JSON.parse(localStorage.getItem("hiddenEvents") || "[]")); } catch {} }, []);
@@ -226,15 +227,16 @@ export default function App() {
   }
   const need = () => { if (!pk) throw new Error("Connect your wallet first"); return pk; };
 
-  const buyTicket = (ev: Row<EventAcc>) => run("Ticket bought", async () => {
+  const buyTicket = (ev: Row<EventAcc>, n = 1) => run(n > 1 ? `${n} tickets bought` : "Ticket bought", async () => {
     const buyer = need(); const e = ev.publicKey;
     const buyerToken = await buyerAta(ev.account.mint);
     const fresh: any = await (program.account as any).event.fetch(e);
-    return [await program.methods.buyTicket().accounts({
-      buyer, event: e, ticket: ticketPda(e, fresh.sold), buyerToken, treasury: ev.account.treasury,
+    // Several tickets go in one transaction, so it is all or nothing; ticket ids follow `sold`.
+    return Promise.all(Array.from({ length: n }, (_, i) => program.methods.buyTicket().accounts({
+      buyer, event: e, ticket: ticketPda(e, fresh.sold + i), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
       presale: presalePda(e), fanPass: fanPda(ev.account.organizer, buyer),
-    }).instruction()];
+    }).instruction()));
   }, ev);
 
   const list = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Ticket listed", async () => {
@@ -341,7 +343,18 @@ export default function App() {
             </>
           );
         })()}
-        <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv)}>{soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : `Buy ticket · ${usd(selEv.account.facePrice)}`}</button>
+        {!soldOut(selEv) && !isPast(selEv) && (() => {
+          const max = Math.min(4, selEv.account.maxSupply - selEv.account.sold), n = Math.min(qty, max);
+          return (
+            <label className="flex items-center gap-3 text-lg">Tickets
+              <select className={input} style={{ width: "auto" }} value={n} onChange={(e) => setQty(Number(e.target.value))}>
+                {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+              </select>
+              <span className="text-zinc-400">Total {usd(selEv.account.facePrice.muln(n))}</span>
+            </label>
+          );
+        })()}
+        <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv, Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold))}>{soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : `Buy ${Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) > 1 ? Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) + " tickets" : "ticket"} · ${usd(selEv.account.facePrice.muln(Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold)))}`}</button>
       </section>
       <section className={`${card} space-y-4`}>
         <h2 className="text-2xl font-bold">Resale market</h2>
