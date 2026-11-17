@@ -45,12 +45,50 @@ pub mod facevalue {
     }
 
     pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
-        early_access_gate(&ctx.accounts.presale, &ctx.accounts.fan_pass, ctx.program_id)?;
         let (sold, max_supply, face_price) = {
             let e = &ctx.accounts.event;
             (e.sold, e.max_supply, e.face_price)
         };
         require!(sold < max_supply, FaceValueError::SoldOut);
+        let event_key = ctx.accounts.event.key();
+        let buyer = ctx.accounts.buyer.key();
+
+        // Fan perks, if the organizer set them before the first sale. A fan has at least
+        // min_attended check-ins at this organizer's events (counted by check_in).
+        let mut price = face_price;
+        if let Some(perks) = read_account::<Perks>(&ctx.accounts.perks, ctx.program_id)? {
+            let attended = read_account::<FanPass>(&ctx.accounts.fan_pass, ctx.program_id)?
+                .map_or(0, |f| f.attended);
+            let fan = attended >= perks.min_attended;
+            if Clock::get()?.unix_timestamp < perks.presale_ends_at {
+                require!(fan, FaceValueError::PresaleFansOnly);
+            }
+            // One discounted ticket per fan per event: the receipt PDA exists once it is used,
+            // so a fan can't buy many discounted tickets and resell them at face.
+            let receipt = ctx.accounts.discount.to_account_info();
+            if fan && perks.discount_bps > 0 && receipt.owner != ctx.program_id {
+                let off = (face_price as u128)
+                    .checked_mul(perks.discount_bps as u128)
+                    .ok_or(FaceValueError::MathOverflow)?
+                    .checked_div(10_000)
+                    .ok_or(FaceValueError::MathOverflow)?;
+                let off = u64::try_from(off).map_err(|_| FaceValueError::MathOverflow)?;
+                price = face_price.checked_sub(off).ok_or(FaceValueError::MathOverflow)?;
+                let bump = Pubkey::find_program_address(
+                    &[b"discount", event_key.as_ref(), buyer.as_ref()],
+                    ctx.program_id,
+                )
+                .1;
+                create_pda(
+                    &ctx.accounts.buyer.to_account_info(),
+                    &receipt,
+                    &ctx.accounts.system_program.to_account_info(),
+                    ctx.program_id,
+                    0,
+                    &[b"discount", event_key.as_ref(), buyer.as_ref(), &[bump]],
+                )?;
+            }
+        }
 
         token::transfer(
             CpiContext::new(
@@ -61,11 +99,9 @@ pub mod facevalue {
                     authority: ctx.accounts.buyer.to_account_info(),
                 },
             ),
-            face_price,
+            price,
         )?;
 
-        let event_key = ctx.accounts.event.key();
-        let buyer = ctx.accounts.buyer.key();
         let bump = Pubkey::find_program_address(
             &[b"ticket", event_key.as_ref(), &sold.to_le_bytes()],
             ctx.program_id,
@@ -200,44 +236,41 @@ pub mod facevalue {
         Ok(())
     }
 
-    pub fn set_presale(ctx: Context<SetPresale>, ends_at: i64, min_attended: u32) -> Result<()> {
+    // presale_ends_at = 0: no fans-only window. discount_bps = 0: no discount. At least one is on.
+    pub fn set_perks(
+        ctx: Context<SetPerks>,
+        presale_ends_at: i64,
+        min_attended: u32,
+        discount_bps: u16,
+    ) -> Result<()> {
         require!(ctx.accounts.event.sold == 0, FaceValueError::SalesStarted);
+        let now = Clock::get()?.unix_timestamp;
         require!(
-            min_attended > 0 && ends_at > Clock::get()?.unix_timestamp,
-            FaceValueError::InvalidPresale
+            min_attended > 0
+                && discount_bps <= 5000
+                && (presale_ends_at == 0 || presale_ends_at > now)
+                && (presale_ends_at > 0 || discount_bps > 0),
+            FaceValueError::InvalidPerks
         );
         let event_key = ctx.accounts.event.key();
-        let bump = Pubkey::find_program_address(&[b"presale", event_key.as_ref()], ctx.program_id).1;
-        let presale = &mut ctx.accounts.presale;
-        presale.event = event_key;
-        presale.ends_at = ends_at;
-        presale.min_attended = min_attended;
-        presale.bump = bump;
+        let bump = Pubkey::find_program_address(&[b"perks", event_key.as_ref()], ctx.program_id).1;
+        let perks = &mut ctx.accounts.perks;
+        perks.event = event_key;
+        perks.presale_ends_at = presale_ends_at;
+        perks.min_attended = min_attended;
+        perks.discount_bps = discount_bps;
+        perks.bump = bump;
         Ok(())
     }
 }
 
-// During an event's presale window only fans with enough check-ins at this organizer's events may buy.
-// Both addresses are fixed by seeds in BuyTicket; either account may not exist.
-fn early_access_gate(presale: &AccountInfo, fan_pass: &AccountInfo, program_id: &Pubkey) -> Result<()> {
-    if presale.owner != program_id || presale.data_is_empty() {
-        return Ok(());
+// Reads one of our accounts at a seeds-checked address that may not exist yet.
+fn read_account<T: AccountDeserialize>(ai: &AccountInfo, program_id: &Pubkey) -> Result<Option<T>> {
+    if ai.owner != program_id || ai.data_is_empty() {
+        return Ok(None);
     }
-    let p = {
-        let data = presale.try_borrow_data()?;
-        Presale::try_deserialize(&mut &data[..])?
-    };
-    if Clock::get()?.unix_timestamp >= p.ends_at {
-        return Ok(());
-    }
-    let attended = if fan_pass.owner == program_id && !fan_pass.data_is_empty() {
-        let data = fan_pass.try_borrow_data()?;
-        FanPass::try_deserialize(&mut &data[..])?.attended
-    } else {
-        0
-    };
-    require!(attended >= p.min_attended, FaceValueError::PresaleFansOnly);
-    Ok(())
+    let data = ai.try_borrow_data()?;
+    Ok(Some(T::try_deserialize(&mut &data[..])?))
 }
 
 // Creates a program-owned PDA even if someone already sent lamports to its address
@@ -330,12 +363,16 @@ pub struct BuyTicket<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     // Appended last so the previous program version ignores them as remaining accounts.
-    /// CHECK: address fixed by seeds; read only if the organizer created an early-access window.
-    #[account(seeds = [b"presale", event.key().as_ref()], bump)]
-    pub presale: UncheckedAccount<'info>,
+    /// CHECK: address fixed by seeds; read only if the organizer set fan perks.
+    #[account(seeds = [b"perks", event.key().as_ref()], bump)]
+    pub perks: UncheckedAccount<'info>,
     /// CHECK: address fixed by seeds (this buyer's pass with this organizer); may not exist.
     #[account(seeds = [b"fan", event.organizer.as_ref(), buyer.key().as_ref()], bump)]
     pub fan_pass: UncheckedAccount<'info>,
+    /// CHECK: address fixed by seeds; created (0 bytes, program-owned) when this buyer uses
+    /// the event's fan discount, so it can be used once.
+    #[account(mut, seeds = [b"discount", event.key().as_ref(), buyer.key().as_ref()], bump)]
+    pub discount: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -404,7 +441,7 @@ pub struct CheckIn<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SetPresale<'info> {
+pub struct SetPerks<'info> {
     #[account(mut)]
     pub organizer: Signer<'info>,
     #[account(
@@ -414,11 +451,11 @@ pub struct SetPresale<'info> {
     #[account(
         init,
         payer = organizer,
-        space = 8 + Presale::INIT_SPACE,
-        seeds = [b"presale", event.key().as_ref()],
+        space = 8 + Perks::INIT_SPACE,
+        seeds = [b"perks", event.key().as_ref()],
         bump
     )]
-    pub presale: Account<'info, Presale>,
+    pub perks: Account<'info, Perks>,
     pub system_program: Program<'info, System>,
 }
 
@@ -434,10 +471,11 @@ pub struct FanPass {
 
 #[account]
 #[derive(InitSpace)]
-pub struct Presale {
+pub struct Perks {
     pub event: Pubkey,
-    pub ends_at: i64,
+    pub presale_ends_at: i64,
     pub min_attended: u32,
+    pub discount_bps: u16,
     pub bump: u8,
 }
 
@@ -503,6 +541,6 @@ pub enum FaceValueError {
     PresaleFansOnly,
     #[msg("Tickets already sold; early access must be set before the first sale")]
     SalesStarted,
-    #[msg("Early access needs a future end time and at least 1 check-in")]
-    InvalidPresale,
+    #[msg("Fan perks need at least 1 check-in, a future presale end or 0, a discount of at most 50%, and at least one perk on")]
+    InvalidPerks,
 }

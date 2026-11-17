@@ -20,8 +20,20 @@ html[data-theme="light"] .text-violet-200 { color: #5b21b6; }
 html[data-theme="light"] .text-red-200, html[data-theme="light"] .text-red-300 { color: #991b1b; }
 html[data-theme="light"] [class*="bg-red-950/40"], html[data-theme="light"] [class*="bg-red-500/15"] { background: #fee2e2; }
 html[data-theme="light"] [class*="bg-emerald-500/10"] { background: #d1fae5; }
-.grad { background-image: linear-gradient(90deg, #8b5cf6, #ec4899, #fbbf24); }
-.grad-text { background-image: linear-gradient(90deg, #8b5cf6, #ec4899, #fbbf24); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* One filled button style; inverts with the theme. Accent text for fan perks. */
+:root { --primary-bg: #f4f3f8; --primary-fg: #0b0a12; --surface: #16141f; --nav-active: rgba(255, 255, 255, 0.07); }
+html[data-theme="light"] { --primary-bg: #16141f; --primary-fg: #ffffff; --surface: #ffffff; --nav-active: rgba(27, 23, 48, 0.07); }
+.btn-primary { background: var(--primary-bg); color: var(--primary-fg); }
+.btn-primary:not(:disabled):hover { opacity: 0.88; }
+.nav-active { background: var(--nav-active); }
+.surface { background: var(--surface); }
+html[data-theme="light"] .text-zinc-500 { color: #6b6684; }
+html[data-theme="light"] .text-violet-300 { color: #5b21b6; }
+html[data-theme="light"] .text-emerald-300 { color: #065f46; }
+html[data-theme="light"] [class*="bg-amber-400/10"] { background: #fef3c7; }
+html[data-theme="light"] [class*="focus:border-white/40"]:focus { border-color: rgba(27, 23, 48, 0.45); }
 html { -webkit-tap-highlight-color: transparent; }
 body { overscroll-behavior-y: none; padding-top: env(safe-area-inset-top); }
 button { touch-action: manipulation; min-height: 44px; }
+/* Row separators drawn on children (ui.ts `rows`). */
+html[data-theme="light"] [class*="[&>*+*]:border-white"] > * { border-color: rgba(27, 23, 48, 0.12); }

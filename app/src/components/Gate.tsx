@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { verifyCode } from "@/lib/gate";
-
-const btn = "grad rounded-xl px-6 py-3 text-lg font-semibold text-black disabled:opacity-40";
+import { btn, btn2, card, h2, input } from "./ui";
 
 type Props = {
   program: any; pk: PublicKey | null; eventKey: PublicKey | undefined; busy: boolean;
@@ -35,7 +34,7 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
       if (!eventKey || !t.event.equals(eventKey)) return fail("This ticket is for another event");
       // shortcut: refusing listed tickets narrows the sold-during-check-in race, it does not close it; closing it needs check_in(expected_owner) in the program (SPEC §7).
       if (t.listed) return fail("This ticket is listed for resale. Ask the holder to cancel the listing, then scan again.");
-      if (await checkIn({ event: t.event, ticket: ticketKey })) { setResult({ ok: true, text: `Valid: ticket #${t.ticketId} checked in` }); setText(""); }
+      if (await checkIn({ event: t.event, ticket: ticketKey })) { setResult({ ok: true, text: `Ticket #${t.ticketId} checked in.` }); setText(""); }
       else fail("Check-in was not sent (see the error above)");
     } catch (e: any) { fail(e?.message ?? String(e)); }
   }
@@ -57,19 +56,22 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
-      <h2 className="text-2xl font-bold">Gate</h2>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Paste gate code"
-        className="w-full rounded-xl border border-white/15 bg-black/40 p-3 font-mono text-sm" />
-      <div className="flex flex-wrap gap-3">
-        <button className={btn} disabled={busy || !text.trim()} onClick={() => verify(text)}>Verify &amp; check in</button>
-        {canScan && <button className={btn} disabled={busy || scanning} onClick={scan}>{scanning ? "Scanning…" : "Scan with camera"}</button>}
+    <section className={`${card} space-y-4`}>
+      <div>
+        <h2 className={h2}>Door check-in</h2>
+        <p className="text-base text-zinc-400">Scan or paste a guest&apos;s gate code for the event selected above.</p>
       </div>
-      {!canScan && <p className="text-zinc-400">Camera scanning isn&apos;t supported in this browser, paste the code.</p>}
-      <video ref={video} playsInline muted className={scanning ? "w-full rounded-xl" : "hidden"} />
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Paste gate code"
+        className={`${input} font-mono !text-sm`} />
+      <div className="flex flex-wrap gap-2">
+        <button className={btn} disabled={busy || !text.trim()} onClick={() => verify(text)}>Check in</button>
+        {canScan && <button className={btn2} disabled={busy || scanning} onClick={scan}>{scanning ? "Scanning…" : "Scan with camera"}</button>}
+      </div>
+      {!canScan && <p className="text-base text-zinc-500">This browser can&apos;t scan QR codes. Paste the code instead.</p>}
+      <video ref={video} playsInline muted className={scanning ? "w-full rounded-lg" : "hidden"} />
       {result && (
-        <div role="alert" className={`rounded-xl border p-4 text-lg ${result.ok ? "border-emerald-400/40 bg-emerald-500/10" : "border-red-400/50 bg-red-950/40 text-red-200"}`}>
-          {result.ok ? "✅ " : ""}{result.text}
+        <div role="alert" className={`rounded-lg border p-4 text-base ${result.ok ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300" : "border-red-400/40 bg-red-950/40 text-red-200"}`}>
+          {result.text}
         </div>
       )}
     </section>
