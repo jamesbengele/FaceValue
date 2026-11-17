@@ -255,4 +255,21 @@ describe("facevalue", function () {
     assert.isNull(await p.account.event.fetchNullable(empty));
     await expectErr("EventHasTickets", close(organizer, ev)); // ev has sold tickets
   });
+
+  it("15. event info and gifting", async () => {
+    const e = await createEvt(eventId + 8, "Gift Night", FACE, 0, 3);
+    const info = PublicKey.findProgramAddressSync([Buffer.from("info"), e.toBuffer()], p.programId)[0];
+    const setInfo = (who: Keypair) =>
+      p.methods.setEventInfo(new anchor.BN(1900000000), "Main Hall", "Doors at 7", "https://x.test/a.png")
+        .accounts({ organizer: who.publicKey, event: e, info, systemProgram: SystemProgram.programId }).signers([who]).rpc();
+    await expectErr("NotOrganizer", setInfo(A));
+    await setInfo(organizer);
+    assert.equal((await p.account.eventInfo.fetch(info)).venue, "Main Hall");
+    const t = await buy(A, aTok, e);
+    const send = (who: Keypair, to: PublicKey) =>
+      p.methods.transferTicket().accounts({ owner: who.publicKey, ticket: t, newOwner: to }).signers([who]).rpc();
+    await expectErr("NotOwner", send(B, B.publicKey));
+    await send(A, B.publicKey);
+    assert.equal((await p.account.ticket.fetch(t)).owner.toBase58(), B.publicKey.toBase58());
+  });
 });

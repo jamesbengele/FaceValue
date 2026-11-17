@@ -223,6 +223,40 @@ pub mod facevalue {
         presale.bump = bump;
         Ok(())
     }
+
+    // Optional event details (venue, text, image, real start time). Separate account, so existing events are untouched.
+    pub fn set_event_info(
+        ctx: Context<SetEventInfo>,
+        starts_at: i64,
+        venue: String,
+        description: String,
+        image_url: String,
+    ) -> Result<()> {
+        require!(
+            venue.len() <= 64 && description.len() <= 400 && image_url.len() <= 200 && starts_at > 0,
+            FaceValueError::InvalidEventInfo
+        );
+        let event_key = ctx.accounts.event.key();
+        let bump = Pubkey::find_program_address(&[b"info", event_key.as_ref()], ctx.program_id).1;
+        let info = &mut ctx.accounts.info;
+        info.event = event_key;
+        info.starts_at = starts_at;
+        info.venue = venue;
+        info.description = description;
+        info.image_url = image_url;
+        info.bump = bump;
+        Ok(())
+    }
+
+    // Gift a ticket: no payment, so no price to cap. Listed or used tickets can't be sent.
+    pub fn transfer_ticket(ctx: Context<TransferTicket>) -> Result<()> {
+        let ticket = &mut ctx.accounts.ticket;
+        require!(!ticket.used, FaceValueError::TicketUsed);
+        require!(!ticket.listed, FaceValueError::TicketListed);
+        require!(ctx.accounts.new_owner.key() != ticket.owner, FaceValueError::CannotBuyOwnTicket);
+        ticket.owner = ctx.accounts.new_owner.key();
+        Ok(())
+    }
 }
 
 // During an event's presale window only fans with enough check-ins at this organizer's events may buy.
@@ -453,6 +487,51 @@ pub struct FanPass {
     pub bump: u8,
 }
 
+#[derive(Accounts)]
+pub struct SetEventInfo<'info> {
+    #[account(mut)]
+    pub organizer: Signer<'info>,
+    #[account(
+        constraint = event.organizer == organizer.key() @ FaceValueError::NotOrganizer
+    )]
+    pub event: Account<'info, Event>,
+    #[account(
+        init,
+        payer = organizer,
+        space = 8 + EventInfo::INIT_SPACE,
+        seeds = [b"info", event.key().as_ref()],
+        bump
+    )]
+    pub info: Account<'info, EventInfo>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TransferTicket<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        constraint = ticket.owner == owner.key() @ FaceValueError::NotOwner
+    )]
+    pub ticket: Account<'info, Ticket>,
+    /// CHECK: any wallet address; only its key is stored.
+    pub new_owner: UncheckedAccount<'info>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct EventInfo {
+    pub event: Pubkey,
+    pub starts_at: i64,
+    #[max_len(64)]
+    pub venue: String,
+    #[max_len(400)]
+    pub description: String,
+    #[max_len(200)]
+    pub image_url: String,
+    pub bump: u8,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Presale {
@@ -530,4 +609,8 @@ pub enum FaceValueError {
     OwnerChanged,
     #[msg("Tickets are already sold, so this event can't be deleted")]
     EventHasTickets,
+    #[msg("Event details too long, or start time missing")]
+    InvalidEventInfo,
+    #[msg("Cancel the resale listing before sending this ticket")]
+    TicketListed,
 }
