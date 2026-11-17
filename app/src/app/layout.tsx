@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import Providers from "@/components/Providers";
 
-export const metadata: Metadata = { title: "FaceValue", description: "Student tickets that can never be resold above face value.", appleWebApp: { capable: true, title: "FaceValue", statusBarStyle: "black-translucent" } };
+export const metadata: Metadata = { title: "FaceValue", description: "Student tickets that can never be resold above face value.", icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-180.png" }, appleWebApp: { capable: true, title: "FaceValue", statusBarStyle: "black-translucent" } };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#0b0a12" };
 

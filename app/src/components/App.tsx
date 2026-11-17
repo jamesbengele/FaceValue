@@ -100,6 +100,15 @@ export default function App() {
   const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1" });
 
   const [query, setQuery] = useState("");
+  // Per-device hiding of old events; nothing onchain changes (SPEC §5).
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
+  useEffect(() => { try { setHidden(JSON.parse(localStorage.getItem("hiddenEvents") || "[]")); } catch {} }, []);
+  const hide = (key: string, on: boolean) => setHidden((h) => {
+    const n = on ? [...h, key] : h.filter((k) => k !== key);
+    try { localStorage.setItem("hiddenEvents", JSON.stringify(n)); } catch {}
+    return n;
+  });
   const [fundMsg, setFundMsg] = useState("");
   const [bal, setBal] = useState<{ sol: number; usd: string | null } | "error" | null>(null);
   // Set below once the payment mint is known; load() and getFunds() call it so every refresh path updates the balance.
@@ -285,7 +294,7 @@ export default function App() {
     return ixs;
   });
 
-  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query));
+  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query) && (showHidden || !hidden.includes(e.publicKey.toBase58())));
   const eventsView = !selEv ? (
     <section className={`${card} space-y-4`}>
       <h2 className="text-2xl font-bold">Events</h2>
@@ -295,11 +304,18 @@ export default function App() {
           <p className="text-xl">No events match &quot;{query.trim()}&quot;</p>
           <button className={btn} onClick={() => setQuery("")}>Clear search</button>
         </div>
-      ) : shown.map((ev) => (
-        <button key={ev.publicKey.toBase58()} className="block w-full rounded-xl border border-white/10 p-4 text-left hover:bg-white/[0.06]" onClick={() => setSel(ev.publicKey.toBase58())}>
-          <EventHead ev={ev} early={earlyOf(ev)} />
-        </button>
-      ))}
+      ) : shown.map((ev) => {
+        const key = ev.publicKey.toBase58(), isHidden = hidden.includes(key);
+        return (
+          <div key={key} className={`rounded-xl border border-white/10 hover:bg-white/[0.06] ${isHidden ? "opacity-60" : ""}`}>
+            <button className="block w-full p-4 text-left" onClick={() => setSel(key)}>
+              <EventHead ev={ev} early={earlyOf(ev)} />
+            </button>
+            <button className="mx-4 mb-3 text-base text-zinc-400 underline" onClick={() => hide(key, isHidden)}>{isHidden ? "Unhide" : "Hide on this device"}</button>
+          </div>
+        );
+      })}
+      {hidden.length > 0 && <button className="text-base text-zinc-400 underline" onClick={() => setShowHidden(!showHidden)}>{showHidden ? "Stop showing hidden events" : `Show hidden (${hidden.length})`}</button>}
     </section>
   ) : (
     <>
