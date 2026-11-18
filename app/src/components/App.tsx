@@ -162,9 +162,9 @@ export default function App() {
   // Usernames (off-chain, SPEC §5): address -> name, for event organizers and the signed-in wallet.
   const [names, setNames] = useState<Record<string, string>>({});
   const [namesLoaded, setNamesLoaded] = useState(false);
+  const [namesTried, setNamesTried] = useState(false); // first lookup finished (ok or not); if it fails the app is not blocked
   const [nameInput, setNameInput] = useState("");
   const [nameMsg, setNameMsg] = useState("");
-  const [nameSkipped, setNameSkipped] = useState(false);
   const [giveTo, setGiveTo] = useState<Record<string, string>>({});
   const [fanPasses, setFanPasses] = useState<Row<FanPassAcc>[]>([]);
   const [perksList, setPerksList] = useState<Row<PerksAcc>[]>([]);
@@ -302,9 +302,9 @@ export default function App() {
       const r = await fetch(`/api/username?addresses=${addrs.join(",")}`);
       if (r.ok) { const j = await r.json(); setNames((n) => ({ ...n, ...j })); setNamesLoaded(true); }
     } catch { /* names are optional: fall back to short addresses */ }
+    setNamesTried(true);
   }, [organizersKey, pk]);
   useEffect(() => { loadNames(); }, [loadNames]);
-  useEffect(() => { try { setNameSkipped(sessionStorage.getItem("nameSkipped") === "1"); } catch {} }, []);
   const whoIs = (a: PublicKey) => names[a.toBase58()];
   const saveUsername = async () => {
     setNameMsg("");
@@ -772,6 +772,19 @@ export default function App() {
           <p className="mt-4 text-lg text-zinc-400">Resale is capped at face value by the ticket itself, and fans who show up get first pick next time.</p>
           <button className={`${btn} mt-8`} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in with email</button>
         </section>
+      ) : !namesTried ? (
+        <p className="mt-10 text-center text-zinc-400">Loading…</p>
+      ) : namesLoaded && !names[pk.toBase58()] ? (
+        <section className={`${card} mx-auto mt-10 max-w-xl space-y-3`}>
+          <h2 className={h2}>Pick a username</h2>
+          <p className="text-base text-zinc-400">Required. It is shown under events you create, and you can change it later.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input className={`${input} sm:!w-64`} placeholder="username" aria-label="Username" autoFocus value={nameInput} onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveUsername(); }} />
+            <button className={btn} disabled={busy} onClick={saveUsername}>Save</button>
+          </div>
+          {nameMsg && <p className="text-base text-red-300">{nameMsg}</p>}
+        </section>
       ) : (
         <div className="mt-6 flex flex-col gap-6 md:flex-row md:gap-8">
           {/* Phone: fixed bottom tab bar. md and up: left sidebar. */}
@@ -783,18 +796,6 @@ export default function App() {
             ))}
           </nav>
           <div className="min-w-0 flex-1 space-y-5">
-            {namesLoaded && pk && !names[pk.toBase58()] && !nameSkipped && (
-              <section className={`${card} space-y-3`}>
-                <h2 className={h2}>Pick a username</h2>
-                <p className="text-base text-zinc-400">Shown under events you create. You can change it later.</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input className={`${input} sm:!w-64`} placeholder="username" aria-label="Username" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
-                  <button className={btn} disabled={busy} onClick={saveUsername}>Save</button>
-                  <button className="text-base text-zinc-400 underline hover:text-inherit" onClick={() => { setNameSkipped(true); try { sessionStorage.setItem("nameSkipped", "1"); } catch {} }}>Not now</button>
-                </div>
-                {nameMsg && <p className="text-base text-red-300">{nameMsg}</p>}
-              </section>
-            )}
             {loadErr && <ErrorBox e={{ kind: "other", msg: loadErr }} title="Couldn't load events" />}
             {err && <ErrorBox e={err} face={errFace} onClose={() => setErr(null)} />}
             {view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}
