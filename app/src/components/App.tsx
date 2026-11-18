@@ -265,22 +265,27 @@ export default function App() {
   }, [sel, pk, tickets, connection]);
   const hostEv = myEvents.find((e) => e.publicKey.toBase58() === hostSel) ?? myEvents[0];
 
-  // Balance: SOL plus the token balance of the open event's payment mint (a missing token account is $0.00).
-  const payMint = (selEv ?? hostEv ?? allEvents[0])?.account.mint;
-  const payMintStr = payMint?.toBase58();
+  // Balance: SOL plus the largest balance among the payment tokens the listed events use (a wallet with none is $0.00).
+  // It does not depend on which event is open, so opening an event never changes it.
+  const payMints = useMemo(() => [...new Set(allEvents.map((e) => e.account.mint.toBase58()))].sort(), [allEvents]);
+  const payMintsKey = payMints.join(",");
   refreshBal.current = async () => {
     if (!pk) return;
     try {
       const lamports = await connection.getBalance(pk);
       let usdStr: string | null = null;
-      if (payMint) {
-        try { usdStr = usd((await connection.getTokenAccountBalance(getAssociatedTokenAddressSync(payMint, pk))).value.amount); }
-        catch (e: any) { if (/could not find account|invalid param/i.test(e?.message ?? "")) usdStr = usd(0); else throw e; }
+      if (payMints.length) {
+        const accs = await connection.getParsedTokenAccountsByOwner(pk, { programId: TOKEN_PROGRAM_ID });
+        const best = accs.value.reduce((m, a) => {
+          const info = a.account.data.parsed.info;
+          return payMints.includes(info.mint) && BigInt(info.tokenAmount.amount) > m ? BigInt(info.tokenAmount.amount) : m;
+        }, BigInt(0));
+        usdStr = usd(best);
       }
       setBal({ sol: lamports / 1e9, usd: usdStr });
     } catch { setBal("error"); }
   };
-  useEffect(() => { setBal(null); refreshBal.current(); }, [pk, payMintStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setBal(null); refreshBal.current(); }, [pk, payMintsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
   async function run(text: string, build: () => Promise<TransactionInstruction[]>, ev?: Row<EventAcc>): Promise<boolean> {
