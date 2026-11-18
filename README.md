@@ -2,13 +2,13 @@
 
 Student tickets that can't be resold above face value, enforced by the Solana program itself. Spec: [SPEC.md](SPEC.md). Demo script: [docs/DEMO.md](docs/DEMO.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
-Features: USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; needs the program redeployed with `set_perks`).
+Features: event details (venue, text, image), sending a ticket to a friend at no markup (SPEC §4c), buying up to 4 tickets at once, sold-out and ended states, an organizer sales overview, USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; needs the program redeployed with `set_perks`).
 
 ## Layout
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `app/` Next.js app (IDL: `app/src/idl/facevalue.json`).
 
 ## Deployed
-Devnet program `2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G`. Test mint `4UDrCVHBaJRVYFVCfNjzjseJAgp25Kywz6qZBX3hAWd6` (our own, deployer is mint authority).
+Devnet program `9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2`. Test mint `4UDrCVHBaJRVYFVCfNjzjseJAgp25Kywz6qZBX3hAWd6` (our own, deployer is mint authority).
 
 ## Deploy your own copy (Solana Playground, Anchor 0.29)
 Local `cargo build-sbf` needs a C linker (MSVC build tools); on a machine with one it can be used instead.
@@ -26,7 +26,8 @@ Tests mint their own token and fund wallets by transfer; no airdrops.
 
 ## Run the app
 ```bash
-cd app && npm install        # .npmrc sets legacy-peer-deps (Privy peer deps)
+cd app && cp .env.example .env.local   # then fill it in
+npm install                  # .npmrc sets legacy-peer-deps (Privy peer deps)
 npm run setup-demo           # creates a test mint only; copy it into app/.env.local as DEMO_MINT
 npm run dev                  # http://localhost:3000   (sidebar: Events, My tickets, Host an event; ?organizer=1 opens Host)
 ```
@@ -39,3 +40,6 @@ npm run dev                  # http://localhost:3000   (sidebar: Events, My tick
 - A seller and a buyer can still agree on a higher price in private, also onchain: one transaction that lists at face, buys, and sends extra money on the side, signed by both. The program stops public listings above face, not private deals.
 - A resale that lands between the gate's read and the check-in transaction leaves the buyer with a used ticket. The gate refuses listed tickets to narrow this; closing it needs a program change (SPEC §7).
 - New tickets are numbered by a counter, so buyers who click in the same second collide: one wins and the rest must retry. Fine for a demo, not for a real on-sale.
+
+## Put it online
+Any Next.js host works (e.g. Vercel: import the repo, root directory `app`, add the `.env.example` values as environment variables). Then add the site's address to the Privy app's allowed origins, or sign-in will fail. `/api/drip` is devnet-only and unauthenticated, so keep it off any real-money deployment.

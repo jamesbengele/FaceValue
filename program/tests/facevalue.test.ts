@@ -75,9 +75,9 @@ const resale = (who: Keypair, e: PublicKey, t: PublicKey, sellerTok: PublicKey, 
     .signers([who]).rpc();
 
 // fan_pass is derived from the event's real organizer, so a wrong signer still reaches NotOrganizer.
-async function checkIn(who: Keypair, e: PublicKey, t: PublicKey) {
+async function checkIn(who: Keypair, e: PublicKey, t: PublicKey, expected?: PublicKey) {
   const fan = (await p.account.ticket.fetch(t)).owner;
-  return p.methods.checkIn()
+  return p.methods.checkIn(expected ?? fan)
     .accounts({ organizer: who.publicKey, event: e, ticket: t, fanPass: fanPda(organizer.publicKey, fan), systemProgram: SystemProgram.programId })
     .signers([who]).rpc();
 }
@@ -95,7 +95,7 @@ describe("facevalue", function () {
   before(async () => {
     const tx = new Transaction();
     for (const w of [organizer, A, B, C])
-      tx.add(SystemProgram.transfer({ fromPubkey: deployer.publicKey, toPubkey: w.publicKey, lamports: 50_000_000 }));
+      tx.add(SystemProgram.transfer({ fromPubkey: deployer.publicKey, toPubkey: w.publicKey, lamports: 120_000_000 }));
     await sendAndConfirmTransaction(connection, tx, [deployer]);
 
     mint = await createMint(connection, deployer, deployer.publicKey, null, 6);
@@ -105,7 +105,7 @@ describe("facevalue", function () {
     bTok = await createAssociatedTokenAccount(connection, deployer, mint, B.publicKey);
     cTok = await createAssociatedTokenAccount(connection, deployer, mint, C.publicKey);
     bOtherTok = await createAssociatedTokenAccount(connection, deployer, otherMint, B.publicKey);
-    await mintTo(connection, deployer, mint, aTok, deployer, 200_000_000);
+    await mintTo(connection, deployer, mint, aTok, deployer, 500_000_000);
     await mintTo(connection, deployer, mint, bTok, deployer, 200_000_000);
     await mintTo(connection, deployer, mint, cTok, deployer, 100_000_000);
     await mintTo(connection, deployer, otherMint, bOtherTok, deployer, 100_000_000);
@@ -217,7 +217,7 @@ describe("facevalue", function () {
     const t1 = await buy(B, bTok, ev); // B's second ticket at the same event
     await checkIn(organizer, ev, t1);
     assert.equal(await attended(B.publicKey), 1);
-    e2 = await createEvt(eventId + 4, "Second Night", FACE, 0, 2);
+    e2 = await createEvt(eventId + 9, "Second Night", FACE, 0, 2);
     await checkIn(organizer, e2, await buy(B, bTok, e2));
     const pass = await p.account.fanPass.fetch(fanPda(organizer.publicKey, B.publicKey));
     assert.equal(pass.attended, 2);
@@ -261,5 +261,41 @@ describe("facevalue", function () {
     const c0 = await bal(cTok);
     await buy(C, cTok, de); // no check-ins
     assert.equal(c0 - (await bal(cTok)), FACE);
+  });
+
+  it("13. check_in names the owner the gate saw -> OwnerChanged", async () => {
+    const e = await createEvt(eventId + 6, "Gate Race", FACE, 0, 1);
+    const t = await buy(A, aTok, e);
+    await expectErr("OwnerChanged", checkIn(organizer, e, t, B.publicKey));
+    assert.isFalse((await p.account.ticket.fetch(t)).used);
+    await checkIn(organizer, e, t, A.publicKey);
+    assert.isTrue((await p.account.ticket.fetch(t)).used);
+  });
+
+  it("14. close_event: organizer only, only with nothing sold", async () => {
+    const close = (who: Keypair, e: PublicKey) =>
+      p.methods.closeEvent().accounts({ organizer: who.publicKey, event: e }).signers([who]).rpc();
+    const empty = await createEvt(eventId + 7, "Delete Me", FACE, 0, 1);
+    await expectErr("NotOrganizer", close(A, empty));
+    await close(organizer, empty);
+    assert.isNull(await p.account.event.fetchNullable(empty));
+    await expectErr("EventHasTickets", close(organizer, ev)); // ev has sold tickets
+  });
+
+  it("15. event info and gifting", async () => {
+    const e = await createEvt(eventId + 8, "Gift Night", FACE, 0, 3);
+    const info = PublicKey.findProgramAddressSync([Buffer.from("info"), e.toBuffer()], p.programId)[0];
+    const setInfo = (who: Keypair) =>
+      p.methods.setEventInfo(new anchor.BN(1900000000), "Main Hall", "Doors at 7", "https://x.test/a.png")
+        .accounts({ organizer: who.publicKey, event: e, info, systemProgram: SystemProgram.programId }).signers([who]).rpc();
+    await expectErr("NotOrganizer", setInfo(A));
+    await setInfo(organizer);
+    assert.equal((await p.account.eventInfo.fetch(info)).venue, "Main Hall");
+    const t = await buy(A, aTok, e);
+    const send = (who: Keypair, to: PublicKey) =>
+      p.methods.transferTicket().accounts({ owner: who.publicKey, ticket: t, newOwner: to }).signers([who]).rpc();
+    await expectErr("NotOwner", send(B, B.publicKey));
+    await send(A, B.publicKey);
+    assert.equal((await p.account.ticket.fetch(t)).owner.toBase58(), B.publicKey.toBase58());
   });
 });

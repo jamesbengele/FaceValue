@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 export const PROGRAM_ID = new PublicKey(
-  process.env.PROGRAM_ID || "2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G"
+  process.env.PROGRAM_ID || "9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2"
 );
 export const RPC_URL = process.env.RPC_URL || "https://api.devnet.solana.com";
 

@@ -20,6 +20,10 @@ export const perksPda = (event: PublicKey) =>
 export const discountPda = (event: PublicKey, buyer: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("discount"), event.toBuffer(), buyer.toBuffer()], programId)[0];
 
+export const infoPda = (event: PublicKey) =>
+  PublicKey.findProgramAddressSync([Buffer.from("info"), event.toBuffer()], programId)[0];
+
+export type EventInfoAcc = { event: PublicKey; startsAt: BN; venue: string; description: string; imageUrl: string };
 export type FanPassAcc = { organizer: PublicKey; fan: PublicKey; attended: number; lastEvent: PublicKey };
 export type PerksAcc = { event: PublicKey; presaleEndsAt: BN; minAttended: number; discountBps: number };
 export type EventAcc = { organizer: PublicKey; eventId: BN; name: string; mint: PublicKey; treasury: PublicKey; facePrice: BN; royaltyBps: number; maxSupply: number; sold: number };
