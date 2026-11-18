@@ -19,5 +19,7 @@ export function toUiError(e: any): UiError {
   }
   if (found) return { kind: found.name === "PriceAboveFace" ? "face" : "fv", name: found.name, msg: found.msg ?? found.name };
   if (e instanceof SimError) return { kind: "other", msg: `Simulation failed: ${JSON.stringify(e.err)}\n${logs.slice(-4).join("\n")}` };
+  // Privy wraps anything that ends its confirm window without a signature (closed, cancelled, failed) in this message.
+  if (/Failed to connect to wallet/i.test(e?.message ?? "")) return { kind: "other", msg: "The confirmation window closed before you approved, so nothing was sent." };
   return { kind: "other", msg: e?.message ?? String(e) };
 }

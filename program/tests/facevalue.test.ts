@@ -4,7 +4,7 @@ import {
   TOKEN_PROGRAM_ID, createMint, createAssociatedTokenAccount, mintTo, getAccount,
 } from "@solana/spl-token";
 import { assert } from "chai";
-import { loadDeployer, setup, eventPda, ticketPda, fanPda, presalePda, errName } from "./helpers";
+import { loadDeployer, setup, eventPda, ticketPda, fanPda, perksPda, discountPda, errName } from "./helpers";
 
 const FACE = 50_000_000;
 const deployer = loadDeployer();
@@ -53,7 +53,7 @@ async function buy(who: Keypair, whoTok: PublicKey, e: PublicKey, tokOverride?: 
     .accounts({
       buyer: who.publicKey, event: e, ticket: t, buyerToken: tokOverride ?? whoTok, treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
-      presale: presalePda(e), fanPass: fanPda(st.organizer, who.publicKey),
+      perks: perksPda(e), fanPass: fanPda(st.organizer, who.publicKey), discount: discountPda(e, who.publicKey),
     })
     .signers([who])
     .rpc();
@@ -82,9 +82,9 @@ async function checkIn(who: Keypair, e: PublicKey, t: PublicKey, expected?: Publ
     .signers([who]).rpc();
 }
 
-const setPresale = (who: Keypair, e: PublicKey, endsAt: number, min: number) =>
-  p.methods.setPresale(new anchor.BN(endsAt), min)
-    .accounts({ organizer: who.publicKey, event: e, presale: presalePda(e), systemProgram: SystemProgram.programId })
+const setPerks = (who: Keypair, e: PublicKey, presaleEndsAt: number, min: number, discountBps = 0) =>
+  p.methods.setPerks(new anchor.BN(presaleEndsAt), min, discountBps)
+    .accounts({ organizer: who.publicKey, event: e, perks: perksPda(e), systemProgram: SystemProgram.programId })
     .signers([who]).rpc();
 
 const attended = async (fan: PublicKey) => (await p.account.fanPass.fetch(fanPda(organizer.publicKey, fan))).attended;
@@ -228,13 +228,39 @@ describe("facevalue", function () {
   it("12. early access: fans only until ends_at", async () => {
     const pe = await createEvt(eventId + 5, "Fans First", FACE, 0, 3);
     const endsAt = Math.floor(Date.now() / 1000) + 600;
-    await expectErr("NotOrganizer", setPresale(A, pe, endsAt, 2));
-    await expectErr("InvalidPresale", setPresale(organizer, pe, endsAt, 0));
-    await setPresale(organizer, pe, endsAt, 2);
+    await expectErr("NotOrganizer", setPerks(A, pe, endsAt, 2));
+    await expectErr("InvalidPerks", setPerks(organizer, pe, endsAt, 0));
+    await setPerks(organizer, pe, endsAt, 2);
     await expectErr("PresaleFansOnly", buy(C, cTok, pe));
     const t = await buy(B, bTok, pe);
     assert.equal((await p.account.ticket.fetch(t)).owner.toBase58(), B.publicKey.toBase58());
-    await expectErr("SalesStarted", setPresale(organizer, e2, endsAt, 1));
+    await expectErr("SalesStarted", setPerks(organizer, e2, endsAt, 1));
+  });
+
+  it("13. fan discount: one discounted ticket per fan per event; non-fans pay face", async () => {
+    await mintTo(connection, deployer, mint, bTok, deployer, 200_000_000);
+    const de = await createEvt(eventId + 6, "Fan Discount", FACE, 0, 4);
+    await expectErr("InvalidPerks", setPerks(organizer, de, 0, 1, 5001)); // above 50%
+    await expectErr("InvalidPerks", setPerks(organizer, de, 0, 1, 0)); // no perk on
+    await setPerks(organizer, de, 0, 2, 1000); // 10% off for 2+ check-ins, no presale
+    const perks = await p.account.perks.fetch(perksPda(de));
+    assert.equal(perks.discountBps, 1000);
+    assert.equal(perks.presaleEndsAt.toNumber(), 0);
+
+    let [b0, tr0] = [await bal(bTok), await bal(orgTok)];
+    await buy(B, bTok, de); // B has 2 check-ins
+    assert.equal(b0 - (await bal(bTok)), FACE * 0.9);
+    assert.equal((await bal(orgTok)) - tr0, FACE * 0.9);
+    const receipt = await connection.getAccountInfo(discountPda(de, B.publicKey));
+    assert.equal(receipt?.owner.toBase58(), program.programId.toBase58());
+
+    b0 = await bal(bTok);
+    await buy(B, bTok, de); // discount already used
+    assert.equal(b0 - (await bal(bTok)), FACE);
+
+    const c0 = await bal(cTok);
+    await buy(C, cTok, de); // no check-ins
+    assert.equal(c0 - (await bal(cTok)), FACE);
   });
 
   it("13. check_in names the owner the gate saw -> OwnerChanged", async () => {

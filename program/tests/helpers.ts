@@ -50,8 +50,12 @@ export function fanPda(organizer: PublicKey, fan: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("fan"), organizer.toBuffer(), fan.toBuffer()], PROGRAM_ID)[0];
 }
 
-export function presalePda(event: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync([Buffer.from("presale"), event.toBuffer()], PROGRAM_ID)[0];
+export function perksPda(event: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("perks"), event.toBuffer()], PROGRAM_ID)[0];
+}
+
+export function discountPda(event: PublicKey, buyer: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("discount"), event.toBuffer(), buyer.toBuffer()], PROGRAM_ID)[0];
 }
 
 // Returns the Anchor error name from whatever shape the failure arrives in.

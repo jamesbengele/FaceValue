@@ -15,15 +15,17 @@ export const eventPda = (organizer: PublicKey, eventId: BN) =>
 
 export const fanPda = (organizer: PublicKey, fan: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("fan"), organizer.toBuffer(), fan.toBuffer()], programId)[0];
-export const presalePda = (event: PublicKey) =>
-  PublicKey.findProgramAddressSync([Buffer.from("presale"), event.toBuffer()], programId)[0];
+export const perksPda = (event: PublicKey) =>
+  PublicKey.findProgramAddressSync([Buffer.from("perks"), event.toBuffer()], programId)[0];
+export const discountPda = (event: PublicKey, buyer: PublicKey) =>
+  PublicKey.findProgramAddressSync([Buffer.from("discount"), event.toBuffer(), buyer.toBuffer()], programId)[0];
 
 export const infoPda = (event: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("info"), event.toBuffer()], programId)[0];
 
 export type EventInfoAcc = { event: PublicKey; startsAt: BN; venue: string; description: string; imageUrl: string };
 export type FanPassAcc = { organizer: PublicKey; fan: PublicKey; attended: number; lastEvent: PublicKey };
-export type PresaleAcc = { event: PublicKey; endsAt: BN; minAttended: number };
+export type PerksAcc = { event: PublicKey; presaleEndsAt: BN; minAttended: number; discountBps: number };
 export type EventAcc = { organizer: PublicKey; eventId: BN; name: string; mint: PublicKey; treasury: PublicKey; facePrice: BN; royaltyBps: number; maxSupply: number; sold: number };
 export type TicketAcc = { event: PublicKey; ticketId: number; owner: PublicKey; listed: boolean; askPrice: BN; used: boolean };
 export type Row<T> = { publicKey: PublicKey; account: T };
