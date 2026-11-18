@@ -143,8 +143,8 @@ const EVENT_FIELDS: [FormKey, string, boolean, string?][] = [
   ["venue", "Venue (optional)", true], ["description", "Description (optional)", true], ["image", "Image link, https://… (optional)", true],
 ];
 const PERK_FIELDS: [FormKey, string][] = [["early", "Presale length (minutes)"], ["discount", "Discount on one ticket (%)"], ["earlyMin", "Check-ins needed"]];
-type View = "events" | "tickets" | "host";
-const NAV: [View, string][] = [["events", "Events"], ["tickets", "My tickets"], ["host", "Host"]];
+type View = "events" | "tickets" | "mine" | "host";
+const NAV: [View, string][] = [["events", "Events"], ["tickets", "My tickets"], ["mine", "My events"], ["host", "Host"]];
 
 export default function App() {
   const { connection } = useConnection();
@@ -662,9 +662,15 @@ export default function App() {
         </div>
         <button className={btn} disabled={busy} onClick={createEvent}>Create event</button>
       </section>
+    </>
+  );
+
+  // Events the signed-in wallet organizes: sales, buyer link, delete, tickets, check-in and the gate.
+  const myEventsView = (
+    <>
       <section className={`${card} space-y-3`}>
-        <h2 className={h2}>Your events</h2>
-        {myEvents.length === 0 ? <p className="text-zinc-400">None yet.</p> : (
+        <h2 className={h2}>My events</h2>
+        {myEvents.length === 0 ? <p className="text-zinc-400">None yet. <button className="underline hover:text-inherit" onClick={() => { setView("host"); window.scrollTo(0, 0); }}>Host an event</button></p> : (
           <div className={rows}>
             {myEvents.map((ev) => <EventRow key={ev.publicKey.toBase58()} ev={ev} perks={perksOf(ev)} active={ev === hostEv} onClick={() => setHostSel(ev.publicKey.toBase58())} />)}
           </div>
@@ -738,7 +744,7 @@ export default function App() {
           <div className="min-w-0 flex-1 space-y-5">
             {loadErr && <ErrorBox e={{ kind: "other", msg: loadErr }} title="Couldn't load events" />}
             {err && <ErrorBox e={err} face={errFace} onClose={() => setErr(null)} />}
-            {view === "events" ? eventsView : view === "tickets" ? ticketsView : hostView}
+            {view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}
           </div>
         </div>
       )}
