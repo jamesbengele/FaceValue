@@ -9,7 +9,7 @@ import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountP
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
-import { EVENT_ADDRESS, explorerTx } from "@/lib/config";
+import { DEMO_MINT, EVENT_ADDRESS, explorerTx } from "@/lib/config";
 import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
@@ -249,6 +249,7 @@ export default function App() {
   useEffect(() => { if (!pk) return; load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load, pk]);
 
   // Soonest dated event first; undated ones last, newest first.
+  const buyable = (e: Row<EventAcc>) => !DEMO_MINT || e.account.mint.toBase58() === DEMO_MINT;
   const allEvents = useMemo(() => [...(events ?? [])].sort((a, b) => {
     const sa = parseName(a.account.name).startMs, sb = parseName(b.account.name).startMs;
     return sa !== null && sb !== null ? sa - sb : sa !== null ? -1 : sb !== null ? 1 : b.account.eventId.cmp(a.account.eventId);
@@ -274,7 +275,7 @@ export default function App() {
 
   // Balance: SOL plus the largest balance among the payment tokens the listed events use (a wallet with none is $0.00).
   // It does not depend on which event is open, so opening an event never changes it.
-  const payMints = useMemo(() => [...new Set(allEvents.map((e) => e.account.mint.toBase58()))].sort(), [allEvents]);
+  const payMints = useMemo(() => [...new Set(allEvents.filter(buyable).map((e) => e.account.mint.toBase58()))].sort(), [allEvents]);
   const payMintsKey = payMints.join(",");
   refreshBal.current = async () => {
     if (!pk) return;
@@ -338,7 +339,9 @@ export default function App() {
 
   async function buyerAta(mint: PublicKey) {
     const ata = getAssociatedTokenAddressSync(mint, pk!);
-    if (!(await connection.getAccountInfo(ata))) throw new NoTokenAccount();
+    // Each event names its own payment mint, so the header balance (largest across mints) can be money this event can't use.
+    const bal = await connection.getTokenAccountBalance(ata).catch(() => null);
+    if (!bal || bal.value.amount === "0") throw new NoTokenAccount();
     return ata;
   }
   const need = () => { if (!pk) throw new Error("Connect your wallet first"); return pk; };
@@ -440,7 +443,7 @@ export default function App() {
     return ixs;
   });
 
-  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query) && (showHidden || !hidden.includes(e.publicKey.toBase58())));
+  const shown = allEvents.filter((e) => buyable(e) && matchesQuery(e.account.name, query) && (showHidden || !hidden.includes(e.publicKey.toBase58())));
   const eventsView = !selEv ? (
     <section className={`${card} space-y-4`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
