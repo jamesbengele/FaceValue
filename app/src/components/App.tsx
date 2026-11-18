@@ -135,12 +135,11 @@ function groupMine(ts: Row<TicketAcc>[]) {
   ];
 }
 
-type FormKey = "name" | "start" | "face" | "royalty" | "supply" | "mint" | "early" | "discount" | "earlyMin" | "venue" | "description" | "image";
+type FormKey = "name" | "start" | "face" | "royalty" | "supply" | "early" | "discount" | "earlyMin" | "venue" | "description" | "image";
 // [key, label, full width on desktop, help text]
 const EVENT_FIELDS: [FormKey, string, boolean, string?][] = [
-  ["name", "Name", true], ["start", "Date and time", false, "Leave empty for “to be announced”."], ["face", "Face price ($)", false],
+  ["name", "Name", true], ["start", "Date and time", false, "Leave empty for “to be announced”."], ["face", "Face price (USDC)", false],
   ["supply", "Tickets available", false], ["royalty", "Your royalty on resales (%)", false],
-  ["mint", "Payment token mint", true, "Your token account for this mint receives payments."],
   ["venue", "Venue (optional)", true], ["description", "Description (optional)", true], ["image", "Image link, https://… (optional)", true],
 ];
 const PERK_FIELDS: [FormKey, string][] = [["early", "Presale length (minutes)"], ["discount", "Discount on one ticket (%)"], ["earlyMin", "Check-ins needed"]];
@@ -176,7 +175,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [qtys, setQtys] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: DEMO_MINT, early: "0", discount: "0", earlyMin: "1", venue: "", description: "", image: "" });
+  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", discount: "0", earlyMin: "1", venue: "", description: "", image: "" });
 
   const [query, setQuery] = useState("");
   // Per-device hiding of old events; nothing onchain changes (SPEC §5).
@@ -413,7 +412,8 @@ export default function App() {
 
   const createEvent = () => run("Event created", async () => {
     const organizer = need();
-    const mint = new PublicKey(form.mint.trim());
+    if (!DEMO_MINT) throw new Error("Payments are not configured (NEXT_PUBLIC_DEMO_MINT is unset)");
+    const mint = new PublicKey(DEMO_MINT);
     const faceBase = dollarsToBase(form.face);
     if (faceBase === null) throw new Error("Enter the face price as a number");
     const bps = Math.round(Number(form.royalty) * 100), supply = Number(form.supply);

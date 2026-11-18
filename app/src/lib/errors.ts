@@ -4,7 +4,7 @@ export class SimError extends Error {
   constructor(public logs: string[], public err: unknown) { super("Transaction simulation failed"); }
 }
 export class NoTokenAccount extends Error {
-  constructor() { super("You have none of the token this event is priced in. Get test funds only gives the newest token, so older events may not be buyable. Try the newest event."); }
+  constructor() { super("You have no USDC yet. Click Get test funds, then try again."); }
 }
 export type UiError = { kind: "face"; name: string; msg: string } | { kind: "fv"; name: string; msg: string } | { kind: "other"; msg: string };
 
