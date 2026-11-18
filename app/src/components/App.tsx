@@ -176,7 +176,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [qtys, setQtys] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", discount: "0", earlyMin: "1", venue: "", description: "", image: "" });
+  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: DEMO_MINT, early: "0", discount: "0", earlyMin: "1", venue: "", description: "", image: "" });
 
   const [query, setQuery] = useState("");
   // Per-device hiding of old events; nothing onchain changes (SPEC §5).
