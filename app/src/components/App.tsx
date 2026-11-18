@@ -215,8 +215,10 @@ export default function App() {
   const load = useCallback(async () => {
     let evs: Row<EventAcc>[];
     try {
-      evs = (await (program.account as any).event.all()) as Row<EventAcc>[];
-      const tks = (await (program.account as any).ticket.all()) as Row<TicketAcc>[];
+      // Old-layout accounts from earlier program versions are skipped by size.
+      const sized = (t: string, size: number) => (program.account as any)[t].all([{ dataSize: size }]);
+      evs = (await sized("event", 167)) as Row<EventAcc>[];
+      const tks = (await sized("ticket", 87)) as Row<TicketAcc>[];
       setEvents(evs); setTickets(tks); setLoadErr(null);
       refreshBal.current();
     } catch (e: any) {
