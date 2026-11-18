@@ -13,6 +13,7 @@ import { EVENT_ADDRESS, explorerTx } from "@/lib/config";
 import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
+import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
 
@@ -158,6 +159,12 @@ export default function App() {
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
   const [tickets, setTickets] = useState<Row<TicketAcc>[]>([]);
   const [infos, setInfos] = useState<Row<EventInfoAcc>[]>([]);
+  // Usernames (off-chain, SPEC §5): address -> name, for event organizers and the signed-in wallet.
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [namesLoaded, setNamesLoaded] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [nameMsg, setNameMsg] = useState("");
+  const [nameSkipped, setNameSkipped] = useState(false);
   const [giveTo, setGiveTo] = useState<Record<string, string>>({});
   const [fanPasses, setFanPasses] = useState<Row<FanPassAcc>[]>([]);
   const [perksList, setPerksList] = useState<Row<PerksAcc>[]>([]);
@@ -286,6 +293,34 @@ export default function App() {
     } catch { setBal("error"); }
   };
   useEffect(() => { setBal(null); refreshBal.current(); }, [pk, payMintsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const organizersKey = useMemo(() => [...new Set(allEvents.map((e) => e.account.organizer.toBase58()))].sort().join(","), [allEvents]);
+  const loadNames = useCallback(async () => {
+    const addrs = [...new Set([...organizersKey.split(",").filter(Boolean), ...(pk ? [pk.toBase58()] : [])])];
+    if (!addrs.length) return;
+    try {
+      const r = await fetch(`/api/username?addresses=${addrs.join(",")}`);
+      if (r.ok) { const j = await r.json(); setNames((n) => ({ ...n, ...j })); setNamesLoaded(true); }
+    } catch { /* names are optional: fall back to short addresses */ }
+  }, [organizersKey, pk]);
+  useEffect(() => { loadNames(); }, [loadNames]);
+  useEffect(() => { try { setNameSkipped(sessionStorage.getItem("nameSkipped") === "1"); } catch {} }, []);
+  const whoIs = (a: PublicKey) => names[a.toBase58()];
+  const saveUsername = async () => {
+    setNameMsg("");
+    const bad = usernameError(nameInput);
+    if (bad) { setNameMsg(bad); return; }
+    try {
+      if (!pk || !wallet.signMessage) throw new Error("This wallet can't sign messages");
+      const name = normalizeUsername(nameInput);
+      const signature = await wallet.signMessage(new TextEncoder().encode(usernameMessage(name)));
+      const r = await fetch("/api/username", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: pk.toBase58(), username: name, signature: Buffer.from(signature).toString("base64") }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Could not save the username");
+      setNames((n) => ({ ...n, [pk.toBase58()]: name }));
+    } catch (e: any) { setNameMsg(e?.message ?? "Could not save the username"); }
+  };
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
   async function run(text: string, build: () => Promise<TransactionInstruction[]>, ev?: Row<EventAcc>): Promise<boolean> {
@@ -444,6 +479,7 @@ export default function App() {
             <>
               <div className="space-y-1">
                 <h2 className="text-2xl font-bold sm:text-3xl">{m.name}</h2>
+                <p className="text-base text-zinc-400">Created by {whoIs(selEv.account.organizer) ? <><span className="font-semibold text-inherit">{whoIs(selEv.account.organizer)}</span> <span className="font-mono text-sm">{short(selEv.account.organizer)}</span></> : <span className="font-mono text-sm">{short(selEv.account.organizer)}</span>}</p>
                 <p className="text-zinc-400">{fmtStart(m.startMs)} · {selEv.account.sold} of {selEv.account.maxSupply} sold</p>
                 {soldOut(selEv) && <span className="mr-2 inline-block rounded-full bg-rose-500/20 px-3 py-0.5 text-base text-rose-200">Sold out</span>}
                 {isPast(selEv) && <span className="inline-block rounded-full bg-zinc-500/20 px-3 py-0.5 text-base text-zinc-300">Ended</span>}
@@ -747,6 +783,18 @@ export default function App() {
             ))}
           </nav>
           <div className="min-w-0 flex-1 space-y-5">
+            {namesLoaded && pk && !names[pk.toBase58()] && !nameSkipped && (
+              <section className={`${card} space-y-3`}>
+                <h2 className={h2}>Pick a username</h2>
+                <p className="text-base text-zinc-400">Shown under events you create. You can change it later.</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input className={`${input} sm:!w-64`} placeholder="username" aria-label="Username" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
+                  <button className={btn} disabled={busy} onClick={saveUsername}>Save</button>
+                  <button className="text-base text-zinc-400 underline hover:text-inherit" onClick={() => { setNameSkipped(true); try { sessionStorage.setItem("nameSkipped", "1"); } catch {} }}>Not now</button>
+                </div>
+                {nameMsg && <p className="text-base text-red-300">{nameMsg}</p>}
+              </section>
+            )}
             {loadErr && <ErrorBox e={{ kind: "other", msg: loadErr }} title="Couldn't load events" />}
             {err && <ErrorBox e={err} face={errFace} onClose={() => setErr(null)} />}
             {view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}
