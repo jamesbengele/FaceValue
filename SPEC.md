@@ -151,7 +151,7 @@ The gate passes the verified wallet `w` to `check_in(expected_owner)`; if the ti
 `@privy-io/react-auth` with `loginMethods: ['email']`, `embeddedWallets.solana createOnLogin: 'all-users'`. Needs `NEXT_PUBLIC_PRIVY_APP_ID` (user creates the Privy app). Email wallets need SOL for rent/fees, a USDC token account and test USDC: a devnet-only `/api/drip` route (server key from env) sends a small SOL top-up and mints test USDC when the wallet is below a threshold. A real launch needs fee sponsorship (a paymaster/relayer), real USDC via on-ramp, and auth/rate-limits on that route.
 Wallet confirmation prompts stay on (`showWalletUIs: true`), so a successful buy asks the user to confirm and a blocked listing never does.
 
-**Balance:** the signed-in header shows `SOL x.xxxx · $yyy.yy` (SOL plus the open event's payment-token balance; a missing token account is $0.00). It refreshes on sign-in, with the 15 s poll, after every transaction and after Get test funds; on RPC failure it shows "Balance unavailable".
+**Balance:** the signed-in header shows `SOL x.xxxx · $yyy.yy` (SOL plus the largest balance among the payment tokens the listed events use, so it does not change when an event is opened; none held is $0.00). It refreshes on sign-in, with the 15 s poll, after every transaction and after Get test funds; on RPC failure it shows "Balance unavailable".
 **Theme:** light and dark modes follow the OS setting, with a header toggle saved in localStorage. The active nav item (sidebar and phone tab bar) has a subtle filled background.
 **Search:** the Events list has a client-side "Search events" box (case-insensitive match on name and date text).
 
