@@ -5,7 +5,7 @@ import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.j
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
-import { EventAcc, FanPassAcc, PresaleAcc, Row, TicketAcc, eventPda, fanPda, makeProgram, presalePda, ticketPda } from "@/lib/program";
+import { EventAcc, EventInfoAcc, FanPassAcc, PresaleAcc, Row, TicketAcc, eventPda, fanPda, infoPda, makeProgram, presalePda, ticketPda } from "@/lib/program";
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, UiError, toUiError } from "@/lib/errors";
@@ -63,16 +63,22 @@ function EventHead({ ev, big, early }: { ev: Row<EventAcc>; big?: boolean; early
       <div className={big ? "text-2xl font-bold" : "text-xl font-semibold"}>{m.name}</div>
       <div className="text-zinc-300">{fmtStart(m.startMs)}</div>
       <div className="text-zinc-400">Face price {usd(ev.account.facePrice)} · {ev.account.sold} of {ev.account.maxSupply} sold</div>
+      {soldOut(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-rose-500/20 px-3 py-1 text-base text-rose-200">Sold out</span>}
+      {isPast(ev) && <span className="mr-2 mt-1 inline-block rounded-full bg-zinc-500/20 px-3 py-1 text-base text-zinc-300">Ended</span>}
       {early && <div className="mt-1 inline-block rounded-full bg-amber-400/20 px-3 py-1 text-base text-amber-200">🎟️ Fans-only early access until {fmtTime(early)}</div>}
     </div>
   );
 }
 
+const soldOut = (ev: Row<EventAcc>) => ev.account.sold >= ev.account.maxSupply;
+// An event with no date is never "ended".
+const isPast = (ev: Row<EventAcc>) => { const t = parseName(ev.account.name).startMs; return t !== null && t < Date.now(); };
 const fmtTime = (p: PresaleAcc) => new Date(p.endsAt.toNumber() * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const LABELS = {
   name: "Name", start: "Date and time", face: "Face price ($)", royalty: "Royalty (%)", supply: "Max supply", mint: "Payment token mint address",
+  venue: "Venue (optional)", description: "Description (optional)", image: "Image link, https://… (optional)",
   early: "Fans-only early access (minutes from now, 0 = off)", earlyMin: "Check-ins at your past events needed for early access",
 };
 type View = "events" | "tickets" | "host";
@@ -89,6 +95,8 @@ export default function App() {
   const [hostSel, setHostSel] = useState(""); // event open in Host ("" = newest of mine)
   const [events, setEvents] = useState<Row<EventAcc>[] | null>(null);
   const [tickets, setTickets] = useState<Row<TicketAcc>[]>([]);
+  const [infos, setInfos] = useState<Row<EventInfoAcc>[]>([]);
+  const [giveTo, setGiveTo] = useState<Record<string, string>>({});
   const [fanPasses, setFanPasses] = useState<Row<FanPassAcc>[]>([]);
   const [presales, setPresales] = useState<Row<PresaleAcc>[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -97,9 +105,19 @@ export default function App() {
   const [toast, setToast] = useState<{ sig: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [prices, setPrices] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1" });
+  const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", earlyMin: "1", venue: "", description: "", image: "" });
 
   const [query, setQuery] = useState("");
+  // Per-device hiding of old events; nothing onchain changes (SPEC §5).
+  const [qty, setQty] = useState(1);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
+  useEffect(() => { try { setHidden(JSON.parse(localStorage.getItem("hiddenEvents") || "[]")); } catch {} }, []);
+  const hide = (key: string, on: boolean) => setHidden((h) => {
+    const n = on ? [...h, key] : h.filter((k) => k !== key);
+    try { localStorage.setItem("hiddenEvents", JSON.stringify(n)); } catch {}
+    return n;
+  });
   const [fundMsg, setFundMsg] = useState("");
   const [bal, setBal] = useState<{ sol: number; usd: string | null } | "error" | null>(null);
   // Set below once the payment mint is known; load() and getFunds() call it so every refresh path updates the balance.
@@ -147,6 +165,7 @@ export default function App() {
       };
       const orgs = [...new Set(evs.map((e) => e.account.organizer.toBase58()))].map((o) => new PublicKey(o));
       setPresales(await at<PresaleAcc>("presale", evs.map((e) => presalePda(e.publicKey))));
+      setInfos(await at<EventInfoAcc>("eventInfo", evs.map((e) => infoPda(e.publicKey))));
       setFanPasses(pk ? await at<FanPassAcc>("fanPass", orgs.map((o) => fanPda(o, pk))) : []);
     } catch { /* keep the last good values */ }
   }, [program, pk]);
@@ -212,15 +231,16 @@ export default function App() {
   }
   const need = () => { if (!pk) throw new Error("Connect your wallet first"); return pk; };
 
-  const buyTicket = (ev: Row<EventAcc>) => run("Ticket bought", async () => {
+  const buyTicket = (ev: Row<EventAcc>, n = 1) => run(n > 1 ? `${n} tickets bought` : "Ticket bought", async () => {
     const buyer = need(); const e = ev.publicKey;
     const buyerToken = await buyerAta(ev.account.mint);
     const fresh: any = await (program.account as any).event.fetch(e);
-    return [await program.methods.buyTicket().accounts({
-      buyer, event: e, ticket: ticketPda(e, fresh.sold), buyerToken, treasury: ev.account.treasury,
+    // Several tickets go in one transaction, so it is all or nothing; ticket ids follow `sold`.
+    return Promise.all(Array.from({ length: n }, (_, i) => program.methods.buyTicket().accounts({
+      buyer, event: e, ticket: ticketPda(e, fresh.sold + i), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
       presale: presalePda(e), fanPass: fanPda(ev.account.organizer, buyer),
-    }).instruction()];
+    }).instruction()));
   }, ev);
 
   const list = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Ticket listed", async () => {
@@ -248,15 +268,28 @@ export default function App() {
     }).instruction()];
   }, ev);
 
-  // fan_pass belongs to whoever owns the ticket right now, so read the owner fresh.
-  async function checkInIx(event: PublicKey, ticket: PublicKey) {
+  // `owner` is who the organizer saw holding the ticket; the program rejects the check-in (OwnerChanged) if it was resold since.
+  async function checkInIx(event: PublicKey, ticket: PublicKey, owner: PublicKey) {
     const organizer = need();
-    const t = (await (program.account as any).ticket.fetch(ticket)) as TicketAcc;
-    return program.methods.checkIn().accounts({
-      organizer, event, ticket, fanPass: fanPda(organizer, t.owner), systemProgram: SystemProgram.programId,
+    return program.methods.checkIn(owner).accounts({
+      organizer, event, ticket, fanPass: fanPda(organizer, owner), systemProgram: SystemProgram.programId,
     }).instruction();
   }
-  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () => [await checkInIx(ev.publicKey, t.publicKey)]);
+  const checkIn = (t: Row<TicketAcc>, ev: Row<EventAcc>) => run("Checked in", async () => [await checkInIx(ev.publicKey, t.publicKey, t.account.owner)]);
+
+  const deleteEvent = (ev: Row<EventAcc>) => {
+    if (!window.confirm(`Delete "${parseName(ev.account.name).name}"? This can't be undone.`)) return;
+    return run("Event deleted", async () => [await program.methods.closeEvent().accounts({ organizer: need(), event: ev.publicKey }).instruction()]);
+  };
+
+  const infoOf = (ev: Row<EventAcc>) => infos.find((i) => i.account.event.equals(ev.publicKey))?.account;
+
+  // Gift: the program refuses used or listed tickets; no payment, so there is no price to cap.
+  const give = (t: Row<TicketAcc>) => run("Ticket sent", async () => {
+    let to: PublicKey;
+    try { to = new PublicKey((giveTo[t.publicKey.toBase58()] ?? "").trim()); } catch { throw new Error("Paste your friend's wallet address (they find it at the top of My tickets)"); }
+    return [await program.methods.transferTicket().accounts({ owner: need(), ticket: t.publicKey, newOwner: to }).instruction()];
+  });
 
   const createEvent = () => run("Event created", async () => {
     const organizer = need();
@@ -282,10 +315,14 @@ export default function App() {
     if (earlyMins > 0)
       ixs.push(await program.methods.setPresale(new BN(Math.floor(Date.now() / 1000 + earlyMins * 60)), earlyMin)
         .accounts({ organizer, event, presale: presalePda(event), systemProgram: SystemProgram.programId }).instruction());
+    // Details are optional; they live in a separate account so events without them keep working.
+    if (form.venue || form.description || form.image)
+      ixs.push(await program.methods.setEventInfo(new BN(Math.floor((startMs ?? Date.now()) / 1000)), form.venue, form.description, form.image)
+        .accounts({ organizer, event, info: infoPda(event), systemProgram: SystemProgram.programId }).instruction());
     return ixs;
   });
 
-  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query));
+  const shown = allEvents.filter((e) => matchesQuery(e.account.name, query) && (showHidden || !hidden.includes(e.publicKey.toBase58())));
   const eventsView = !selEv ? (
     <section className={`${card} space-y-4`}>
       <h2 className="text-2xl font-bold">Events</h2>
@@ -295,17 +332,32 @@ export default function App() {
           <p className="text-xl">No events match &quot;{query.trim()}&quot;</p>
           <button className={btn} onClick={() => setQuery("")}>Clear search</button>
         </div>
-      ) : shown.map((ev) => (
-        <button key={ev.publicKey.toBase58()} className="block w-full rounded-xl border border-white/10 p-4 text-left hover:bg-white/[0.06]" onClick={() => setSel(ev.publicKey.toBase58())}>
-          <EventHead ev={ev} early={earlyOf(ev)} />
-        </button>
-      ))}
+      ) : shown.map((ev) => {
+        const key = ev.publicKey.toBase58(), isHidden = hidden.includes(key);
+        return (
+          <div key={key} className={`rounded-xl border border-white/10 hover:bg-white/[0.06] ${isHidden ? "opacity-60" : ""}`}>
+            <button className="block w-full p-4 text-left" onClick={() => setSel(key)}>
+              <EventHead ev={ev} early={earlyOf(ev)} />
+            </button>
+            <button className="mx-4 mb-3 text-base text-zinc-400 underline" onClick={() => hide(key, isHidden)}>{isHidden ? "Unhide" : "Hide on this device"}</button>
+          </div>
+        );
+      })}
+      {hidden.length > 0 && <button className="text-base text-zinc-400 underline" onClick={() => setShowHidden(!showHidden)}>{showHidden ? "Stop showing hidden events" : `Show hidden (${hidden.length})`}</button>}
     </section>
   ) : (
     <>
       <section className={`${card} space-y-3`}>
         <button className="text-zinc-400 underline" onClick={() => setSel("")}>← All events</button>
         <EventHead ev={selEv} big />
+        {(() => { const i = infoOf(selEv); return i && (
+          <div className="space-y-2">
+            {/^https?:\/\//.test(i.imageUrl) && <img src={i.imageUrl} alt="" className="max-h-64 w-full rounded-xl object-cover" />}
+            {i.venue && <div className="text-lg text-zinc-300">📍 {i.venue}</div>}
+            {i.description && <p className="whitespace-pre-line text-zinc-300">{i.description}</p>}
+          </div>
+        ); })()}
+        <button className="text-base text-zinc-400 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link to this event</button>
         {(() => {
           const early = earlyOf(selEv), n = attendedWith(selEv.account.organizer);
           return (
@@ -320,7 +372,18 @@ export default function App() {
             </>
           );
         })()}
-        <button className={btn} disabled={busy} onClick={() => buyTicket(selEv)}>Buy ticket · {usd(selEv.account.facePrice)}</button>
+        {!soldOut(selEv) && !isPast(selEv) && (() => {
+          const max = Math.min(4, selEv.account.maxSupply - selEv.account.sold), n = Math.min(qty, max);
+          return (
+            <label className="flex items-center gap-3 text-lg">Tickets
+              <select className={input} style={{ width: "auto" }} value={n} onChange={(e) => setQty(Number(e.target.value))}>
+                {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+              </select>
+              <span className="text-zinc-400">Total {usd(selEv.account.facePrice.muln(n))}</span>
+            </label>
+          );
+        })()}
+        <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv, Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold))}>{soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : `Buy ${Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) > 1 ? Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold) + " tickets" : "ticket"} · ${usd(selEv.account.facePrice.muln(Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold)))}`}</button>
       </section>
       <section className={`${card} space-y-4`}>
         <h2 className="text-2xl font-bold">Resale market</h2>
@@ -363,15 +426,16 @@ export default function App() {
     </section>
     <section className={`${card} space-y-6`}>
       <h2 className="text-2xl font-bold">My tickets</h2>
+      {pk && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
       {mine.length === 0 && <p className="text-zinc-400">You don&apos;t own a ticket yet.</p>}
-      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).map((ev) => {
+      {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
         const ts = mine.filter((t) => t.account.event.equals(ev.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
         const m = parseName(ev.account.name);
         return (
-          <div key={ev.publicKey.toBase58()} className="space-y-4 rounded-xl border border-white/10 p-4">
+          <div key={ev.publicKey.toBase58()} className={`space-y-4 rounded-xl border border-white/10 p-4 ${isPast(ev) ? "opacity-70" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-xl font-semibold">{m.name}</div>
+                <div className="text-xl font-semibold">{m.name}{isPast(ev) && <span className="ml-2 rounded-full bg-zinc-500/20 px-3 py-1 text-base font-normal text-zinc-300">Ended</span>}</div>
                 <div className="text-zinc-400">{fmtStart(m.startMs)}</div>
               </div>
               <span className="rounded-full border border-white/15 px-3 py-1 text-base">{plural(ts.length, "ticket")}</span>
@@ -395,6 +459,12 @@ export default function App() {
                   </>
                 )}
                 {t.account.listed && <button className={btn} disabled={busy} onClick={() => cancel(t)}>Cancel listing</button>}
+                {!t.account.listed && (
+                  <div className="flex w-full flex-wrap items-center gap-3">
+                    <input className={`${input} !w-72 max-w-full`} placeholder="Friend's wallet address" value={giveTo[key] ?? ""} onChange={(e) => setGiveTo({ ...giveTo, [key]: e.target.value })} />
+                    <button className={btn} disabled={busy || !giveTo[key]} onClick={() => give(t)}>Send to a friend</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -429,21 +499,36 @@ export default function App() {
           </button>
         ))}
         {hostEv && <p className="break-all text-base text-zinc-400">Link for buyers: <code>?event={hostEv.publicKey.toBase58()}</code></p>}
+        {hostEv && (hostEv.account.sold === 0
+          ? <button className={btn} disabled={busy} onClick={() => deleteEvent(hostEv)}>Delete event</button>
+          : <p className="text-base text-zinc-400">Tickets are sold, so this event can&apos;t be deleted.</p>)}
       </section>
       {hostEv && (
         <section className={`${card} space-y-3`}>
           <h2 className="text-2xl font-bold">Tickets · {parseName(hostEv.account.name).name}</h2>
+          {(() => {
+            const ts = ticketsOf(hostEv), n = hostEv.account.sold;
+            const stat = (label: string, v: string | number) => <div className="rounded-xl border border-white/10 p-3"><div className="text-2xl font-bold">{v}</div><div className="text-base text-zinc-400">{label}</div></div>;
+            return (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {stat("Sold", `${n} / ${hostEv.account.maxSupply}`)}
+                {stat("Ticket sales", usd(hostEv.account.facePrice.muln(n)))}
+                {stat("Checked in", ts.filter((t) => t.account.used).length)}
+                {stat("Listed for resale", ts.filter((t) => t.account.listed).length)}
+              </div>
+            );
+          })()}
           {ticketsOf(hostEv).length === 0 && <p className="text-zinc-400">No tickets sold yet.</p>}
           {ticketsOf(hostEv).map((t) => (
             <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xl">Ticket #{t.account.ticketId} · {short(t.account.owner)}</span>
               <Pill t={t.account} />
-              {!t.account.used && !t.account.listed && <button className={btn} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
+              {!t.account.used && <button className={btn} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
             </div>
           ))}
         </section>
       )}
-      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket)])} />
+      <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket, t.owner)])} />
     </>
   );
 
