@@ -53,7 +53,12 @@ function ScalpDemo() {
       <label htmlFor="scalp" className="sr-only">Resale price</label>
       <input id="scalp" type="range" min={10} max={200} step={5} value={price} onChange={(e) => setPrice(Number(e.target.value))}
         className={`scalp-range mt-6 w-full ${blocked ? "is-blocked" : ""}`} />
-      <div className="mt-1 flex justify-between text-sm text-zinc-500"><span>$10</span><span>face ${FACE}</span><span>$200</span></div>
+      <div className="relative mt-1 h-5 text-sm text-zinc-500">
+        <span className="absolute left-0">$10</span>
+        {/* The thumb is 30px wide, so its centre runs from 15px to (100% - 15px), not 0 to 100%. */}
+        <span className="absolute -translate-x-1/2" style={{ left: `calc(15px + (100% - 30px) * ${(FACE - 10) / 190})` }}>face ${FACE}</span>
+        <span className="absolute right-0">$200</span>
+      </div>
 
       <p aria-live="polite" className="mt-4 min-h-[3.5rem] text-lg">
         {blocked
