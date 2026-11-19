@@ -12,14 +12,13 @@ Treat this as your own project: fix root causes, keep it tidy, finish what you s
 - Briefs are short and carry only the goal, files, decisions, constraints and what to return. Send fixes to the same subagent.
 
 ## Fresh-code rule (hard)
-Only `SPEC.md`, `docs/DEMO.md` and `docs/PITCH.md` may be read or copied from `C:\Users\James b\Documents\Hackathon Practice`. Never touch its `program/`, `app/` or `idl/`. Say this in every subagent brief. Never set commit dates by hand.
+Only `SPEC.md` may be read or copied from `C:\Users\James b\Documents\Hackathon Practice`. Never touch its `program/`, `app/` or `idl/`. Say this in every subagent brief. Never set commit dates by hand.
 
 ## Layout
 ```
 SPEC.md        source of truth, revised before code
 README.md      deploy and run
 PROMPTS.md     every subagent prompt and what broke
-docs/          DEMO.md, PITCH.md
 program/       Anchor program and tests
 app/           Next.js app
 ```

@@ -138,7 +138,7 @@ Tests create their own mint, fund wallets by SOL transfer from the deployer, and
 - Every success toast links to Solana Explorer (`?cluster=devnet`). Plain look: one filled button per screen (the main action), outlined buttons elsewhere, a plain wordmark, no gradients or emoji, thin dividers instead of nested cards; light and dark themes; base font ≥ 18px. Wallet, balance, test funds and sign-out live in an account menu; success notices fade on their own, errors stay until dismissed.
 - USDC amounts shown as `$` with 2 decimals.
 
-## 6. Demo (90 s, three Chrome windows: seller, buyer, organizer) — see `docs/DEMO.md`
+## 6. Demo (90 s, three Chrome windows: seller, buyer, organizer)
 Buy ($50) → list at $80 blocked → list at $50 → buyer buys (seller gets $50 minus royalty, one transaction) → seller shows gate code → organizer pastes it → check-in → Used.
 
 ## 7. Rotating gate QR (no program change)
