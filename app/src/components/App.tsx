@@ -5,7 +5,7 @@ import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.j
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
-import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountPda, eventPda, fanPda, infoPda, makeProgram, perksPda, presalePda, programId, ticketPda } from "@/lib/program";
+import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountPda, eventPda, fanPda, infoPda, makeProgram, perksPda, programId, ticketPda } from "@/lib/program";
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, SimError, UiError, toUiError } from "@/lib/errors";
@@ -324,19 +324,10 @@ export default function App() {
   };
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
-  const legacyPresale = useRef(false);
   async function run(text: string, build: () => Promise<TransactionInstruction[]>, ev?: Row<EventAcc>): Promise<boolean> {
     setBusy(true); setErr(null); setToast(null); setErrFace(ev && usd(ev.account.facePrice));
     try {
-      const send = async () => simulateThenSend(connection, wallet, await build());
-      let sig: string;
-      try { sig = await send(); }
-      catch (e) {
-        // The deployed program predates set_perks and wants the old presale address: switch once and retry.
-        if (legacyPresale.current || !(e instanceof SimError && e.logs.some((l) => l.includes("caused by account: presale")))) throw e;
-        legacyPresale.current = true;
-        sig = await send();
-      }
+      const sig = await simulateThenSend(connection, wallet, await build());
       setToast({ sig, text });
       await load();
       return true;
@@ -363,7 +354,7 @@ export default function App() {
     return Promise.all(Array.from({ length: n }, (_, i) => program.methods.buyTicket().accounts({
       buyer, event: e, ticket: ticketPda(e, fresh.sold + i), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
-      perks: legacyPresale.current ? presalePda(e) : perksPda(e), fanPass: fanPda(ev.account.organizer, buyer), discount: discountPda(e, buyer),
+      perks: perksPda(e), fanPass: fanPda(ev.account.organizer, buyer), discount: discountPda(e, buyer),
     }).instruction()));
   }, ev);
 
