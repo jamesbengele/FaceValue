@@ -3,6 +3,7 @@
 // Nothing here touches the chain; the scalp demo and the gate code are illustrations of what the program enforces.
 import { useEffect, useState } from "react";
 import { btn } from "./ui";
+import type { SavedAccount } from "@/lib/savedAccounts";
 
 const FACE = 50;
 
@@ -96,7 +97,9 @@ const STEPS: [string, string][] = [
   ["Walk in with a live code", "A rotating code proves it's really you. Screenshots and scams don't scan."],
 ];
 
-export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn: () => void }) {
+type Props = { ready: boolean; onSignIn: (email?: string) => void; accounts: SavedAccount[]; onForget: (address: string) => void };
+
+export default function Landing({ ready, onSignIn, accounts, onForget }: Props) {
   return (
     <div className="landing pb-10">
       <section className="relative pt-10 sm:pt-16">
@@ -110,8 +113,25 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
         <p className="fade-up mt-6 max-w-xl text-xl text-zinc-400" style={{ animationDelay: "120ms" }}>
           Student tickets that physically can&apos;t be scalped. The resale cap lives inside the ticket, so a $50 seat stays a $50 seat.
         </p>
+        {accounts.length > 0 && (
+          <div className="fade-up mt-8 max-w-md" style={{ animationDelay: "150ms" }}>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">Welcome back</p>
+            <ul className="mt-3 space-y-2">
+              {accounts.slice(0, 4).map((a) => (
+                <li key={a.address} className="landing-card flex items-center gap-2 rounded-2xl border border-white/10 p-1.5 pl-4">
+                  <button className="min-w-0 flex-1 py-1.5 text-left disabled:opacity-40" disabled={!ready} onClick={() => onSignIn(a.email)}>
+                    <span className="block truncate text-lg font-semibold">{a.username ? `@${a.username}` : a.email}</span>
+                    <span className="block truncate text-sm text-zinc-400">{a.username ? a.email : `${a.address.slice(0, 4)}…${a.address.slice(-4)}`}</span>
+                  </button>
+                  <button className={`${btn} !px-4 !py-2`} disabled={!ready} onClick={() => onSignIn(a.email)}>Continue</button>
+                  <button className="rounded-lg px-3 text-xl text-zinc-400 hover:bg-white/[0.06]" aria-label={`Forget ${a.email} on this device`} title="Forget on this device" onClick={() => onForget(a.address)}>×</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="fade-up mt-8 flex flex-wrap items-center gap-4" style={{ animationDelay: "180ms" }}>
-          <button className={`${btn} !px-7 !py-4 !text-lg`} disabled={!ready} onClick={onSignIn}>Get tickets: sign in with email</button>
+          <button className={`${btn} !px-7 !py-4 !text-lg`} disabled={!ready} onClick={() => onSignIn()}>Get tickets: sign in with email</button>
           <span className="text-base text-zinc-500">Free test money on sign-up. Takes 20 seconds.</span>
         </div>
       </section>
@@ -144,7 +164,7 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
       <section className="landing-card mt-16 rounded-3xl border border-white/10 px-6 py-12 text-center sm:py-16">
         <h3 className="font-display text-4xl sm:text-6xl">Your seat. Your price.</h3>
         <p className="mx-auto mt-3 max-w-md text-lg text-zinc-400">No bots, no $400 resale for a $50 ticket.</p>
-        <button className={`${btn} mt-8 !px-7 !py-4 !text-lg`} disabled={!ready} onClick={onSignIn}>Sign in with email</button>
+        <button className={`${btn} mt-8 !px-7 !py-4 !text-lg`} disabled={!ready} onClick={() => onSignIn()}>Sign in with email</button>
       </section>
     </div>
   );

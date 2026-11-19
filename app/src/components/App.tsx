@@ -14,6 +14,7 @@ import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
 import Landing from "./Landing";
+import { SavedAccount, useSavedAccounts } from "@/lib/savedAccounts";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
@@ -33,7 +34,11 @@ function ThemeToggle() {
 type Bal = { sol: number; usd: string | null } | "error" | null;
 const balText = (bal: Bal) => (bal === "error" ? "Balance unavailable" : bal ? `${bal.usd ? `${bal.usd} · ` : ""}${bal.sol.toFixed(3)} SOL` : "…");
 
-function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal; onFunds: () => void; onSignOut: () => void }) {
+type MenuProps = {
+  pk: PublicKey; bal: Bal; email: string | null; username?: string; others: SavedAccount[];
+  onFunds: () => void; onSignOut: () => void; onSwitch: (email?: string) => void; onForget: (address: string) => void;
+};
+function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onSwitch, onForget }: MenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -51,12 +56,26 @@ function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal;
       {open && (
         <div role="menu" className="surface absolute right-0 z-30 mt-2 w-72 rounded-xl border border-white/10 p-2 shadow-xl">
           <div className="space-y-1 px-3 py-2">
-            <div className="text-sm text-zinc-400">Email wallet</div>
-            <div className="break-all font-mono text-sm">{pk.toBase58()}</div>
+            <div className="text-sm text-zinc-400">Signed in{username ? <> as <b className="text-inherit">@{username}</b></> : ""}</div>
+            {email && <div className="truncate text-base">{email}</div>}
+            <div className="break-all font-mono text-sm text-zinc-400">{pk.toBase58()}</div>
             <div className="pt-1 text-base tabular-nums">{balText(bal)}</div>
           </div>
           <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={() => { onFunds(); setOpen(false); }}>Get test funds</button>
+          <div className="my-1 border-t border-white/10" />
+          <div className="px-3 pb-1 pt-2 text-sm text-zinc-400">Accounts on this device</div>
+          {others.map((a) => (
+            <div key={a.address} className="flex items-center gap-1">
+              <button role="menuitem" className={`${item} min-w-0 flex-1`} onClick={() => { setOpen(false); onSwitch(a.email); }} title={`Switch to ${a.email}`}>
+                <span className="block truncate">{a.username ? `@${a.username}` : a.email}</span>
+                {a.username && <span className="block truncate text-sm text-zinc-400">{a.email}</span>}
+              </button>
+              <button className="rounded-lg px-3 py-2 text-zinc-400 hover:bg-white/[0.06]" aria-label={`Forget ${a.email} on this device`} title="Forget on this device" onClick={() => onForget(a.address)}>×</button>
+            </div>
+          ))}
+          <button role="menuitem" className={item} onClick={() => { setOpen(false); onSwitch(); }}>+ Add another account</button>
+          <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={onSignOut}>Sign out</button>
         </div>
       )}
@@ -161,6 +180,12 @@ export default function App() {
   const [infos, setInfos] = useState<Row<EventInfoAcc>[]>([]);
   // Usernames (off-chain, SPEC §5): address -> name, for event organizers and the signed-in wallet.
   const [names, setNames] = useState<Record<string, string>>({});
+  // Remember each account signed in on this device (email, wallet, username) for one-tap switching.
+  const saved = useSavedAccounts();
+  const myEmail = wallet.emailAuth?.email ?? null;
+  const myName = pk ? names[pk.toBase58()] : undefined;
+  const { remember } = saved;
+  useEffect(() => { if (pk && myEmail) remember({ email: myEmail, address: pk.toBase58(), username: myName }); }, [pk, myEmail, myName, remember]);
   const [namesLoaded, setNamesLoaded] = useState(false);
   const [namesTried, setNamesTried] = useState(false); // first lookup finished (ok or not); if it fails the app is not blocked
   const [nameInput, setNameInput] = useState("");
@@ -768,12 +793,13 @@ export default function App() {
         <div className="flex items-center gap-2">
           {pk && bal !== null && bal !== "error" && bal.usd && <span className="hidden text-base text-zinc-400 tabular-nums sm:inline">{bal.usd}</span>}
           <ThemeToggle />
-          {pk && <AccountMenu pk={pk} bal={bal} onFunds={getFunds} onSignOut={() => wallet.emailAuth?.logout()} />}
+          {pk && <AccountMenu pk={pk} bal={bal} email={myEmail} username={myName} others={saved.accounts.filter((a) => a.address !== pk.toBase58())}
+            onFunds={getFunds} onSignOut={() => wallet.emailAuth?.logout()} onSwitch={(e) => wallet.emailAuth?.switchTo(e)} onForget={saved.forget} />}
         </div>
       </header>
 
       {!pk ? (
-        <Landing ready={!!wallet.emailAuth?.ready} onSignIn={() => wallet.emailAuth?.login()} />
+        <Landing ready={!!wallet.emailAuth?.ready} onSignIn={(e) => wallet.emailAuth?.login(e)} accounts={saved.accounts} onForget={saved.forget} />
       ) : !namesTried ? (
         <p className="mt-10 text-center text-zinc-400">Loading…</p>
       ) : namesLoaded && !names[pk.toBase58()] ? (
