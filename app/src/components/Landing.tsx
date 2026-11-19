@@ -43,7 +43,12 @@ function ScalpDemo() {
       <label htmlFor="scalp" className="sr-only">Resale price</label>
       <input id="scalp" type="range" min={10} max={200} step={5} value={price} onChange={(e) => setPrice(Number(e.target.value))}
         className={`scalp-range mt-6 w-full ${blocked ? "is-blocked" : ""}`} />
-      <div className="mt-1 flex justify-between text-sm text-zinc-500"><span>$10</span><span>face ${FACE}</span><span>$200</span></div>
+      <div className="relative mt-1 h-5 text-sm text-zinc-500">
+        <span className="absolute left-0">$10</span>
+        {/* The thumb is 30px wide, so its centre runs from 15px to (100% - 15px), not 0 to 100%. */}
+        <span className="absolute -translate-x-1/2" style={{ left: `calc(15px + (100% - 30px) * ${(FACE - 10) / 190})` }}>face ${FACE}</span>
+        <span className="absolute right-0">$200</span>
+      </div>
 
       <p aria-live="polite" className="mt-4 min-h-[3.5rem] text-lg">
         {blocked
@@ -101,6 +106,9 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
     <div className="landing pb-10">
       <section className="relative pt-10 sm:pt-16">
         <div className="hero-glow" aria-hidden />
+        <div className="float-ticket ft-1" aria-hidden>$50</div>
+        <div className="float-ticket ft-2" aria-hidden>$50</div>
+        <div className="float-ticket ft-3" aria-hidden>$50</div>
         <p className="fade-up inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-sm text-zinc-400">
           <span className="live-dot" aria-hidden /> Live on Solana devnet · built at UBC
         </p>
@@ -118,7 +126,7 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
 
       <section className="mt-14 grid gap-5 lg:grid-cols-[1.15fr_1fr] lg:items-start">
         <ScalpDemo />
-        <div className="space-y-5">
+        <div className="space-y-5 fade-up" style={{ animationDelay: "260ms" }}>
           <GateCodeDemo />
           <div className="landing-card grid grid-cols-3 divide-x divide-white/10 rounded-3xl border border-white/10 py-5 text-center">
             {[["$0", "markup, ever"], ["10 s", "gate code life"], ["5%", "royalty to hosts"]].map(([n, l]) => (
@@ -132,7 +140,7 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
         <h3 className="font-display text-4xl sm:text-5xl">How it works</h3>
         <ol className="mt-6 grid gap-5 md:grid-cols-3">
           {STEPS.map(([t, d], i) => (
-            <li key={t} className="landing-card rounded-3xl border border-white/10 p-6">
+            <li key={t} className="landing-card fade-up rounded-3xl border border-white/10 p-6" style={{ animationDelay: `${320 + i * 90}ms` }}>
               <span className="font-display text-5xl text-zinc-500">0{i + 1}</span>
               <p className="mt-3 text-xl font-semibold">{t}</p>
               <p className="mt-2 text-base text-zinc-400">{d}</p>
