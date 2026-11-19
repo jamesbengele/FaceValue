@@ -88,6 +88,79 @@ function Status({ t }: { t: TicketAcc }) {
   return <span className="inline-flex items-center gap-2 text-base text-zinc-400"><span className={`h-2 w-2 rounded-full ${dot}`} />{label}</span>;
 }
 
+// Host's view of one event: progress, three headline numbers, then who holds each ticket.
+const wholeDollars = (s: string) => s.replace(/\.00$/, "");
+// A steady color per username, so the same person always gets the same avatar.
+const avatarStyle = (name: string) => {
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return name ? { background: `hsl(${h} 70% 55% / 0.2)`, color: `hsl(${h} 65% 50%)` } : { background: "rgba(127,127,127,0.18)", color: "rgb(127,127,127)" };
+};
+function SalesPanel({ ev, tickets, busy, whoIs, onCheckIn }: {
+  ev: Row<EventAcc>; tickets: Row<TicketAcc>[]; busy: boolean;
+  whoIs: (a: PublicKey) => string | undefined; onCheckIn: (t: Row<TicketAcc>) => void;
+}) {
+  const n = ev.account.sold, max = ev.account.maxSupply;
+  const pct = max ? Math.round((n / max) * 100) : 0;
+  const checkedIn = tickets.filter((t) => t.account.used).length;
+  const onResale = tickets.filter((t) => t.account.listed && !t.account.used).length;
+  // Who still needs to come in first, then resale listings, then people already inside.
+  const rank = (t: Row<TicketAcc>) => (t.account.used ? 2 : t.account.listed ? 1 : 0);
+  const sorted = [...tickets].sort((a, b) => rank(a) - rank(b) || a.account.ticketId - b.account.ticketId);
+  const stats: [string, string][] = [[wholeDollars(usd(ev.account.facePrice.muln(n))), "Revenue"], [`${checkedIn}`, "Checked in"], [`${onResale}`, "On resale"]];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-display text-4xl tabular-nums">{n}<span className="text-2xl text-zinc-400"> / {max} sold</span></p>
+          <p className="text-base text-zinc-400 tabular-nums">{pct}%</p>
+        </div>
+        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Tickets sold">
+          <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: "var(--accent)" }} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/10 py-3 text-center">
+        {stats.map(([v, l]) => (
+          <div key={l} className="min-w-0 px-2">
+            <p className="truncate font-display text-2xl tabular-nums sm:text-3xl">{v}</p>
+            <p className="whitespace-nowrap text-sm text-zinc-400">{l}</p>
+          </div>
+        ))}
+      </div>
+      {sorted.length === 0 ? <p className="text-zinc-400">No tickets sold yet. Share the buyer link to get started.</p> : (
+        <ul className={rows}>
+          {sorted.map((t) => {
+            const name = whoIs(t.account.owner);
+            const waiting = !t.account.used && !t.account.listed;
+            return (
+              <li key={t.publicKey.toBase58()} className="flex items-center gap-3 py-3">
+                <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-bold uppercase" style={avatarStyle(name ?? "")}>{name ? name[0] : "?"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{name ? `@${name}` : "Guest"}</p>
+                  <p className="text-sm text-zinc-400">Ticket #{t.account.ticketId}</p>
+                </div>
+                {waiting
+                  ? <button className={`${btn2} !py-2`} disabled={busy} onClick={() => onCheckIn(t)}>Check in</button>
+                  : t.account.used
+                    ? <span className="whitespace-nowrap rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-400">✓ Checked in</span>
+                    : <span className="whitespace-nowrap rounded-full bg-amber-400/10 px-3 py-1 text-sm text-amber-300">For resale</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CopyLink({ path }: { path: string }) {
+  const [done, setDone] = useState(false);
+  const copy = () => {
+    try { void navigator.clipboard.writeText(location.origin + path); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
+  };
+  return <button className={`${btn2} !py-2`} onClick={copy}>{done ? "Link copied ✓" : "Copy buyer link"}</button>;
+}
+
 function ErrorBox({ e, face, title, onClose }: { e: UiError; face?: string; title?: string; onClose?: () => void }) {
   const [head, body, amber] =
     e.kind === "fv" && e.name === "PresaleFansOnly"
@@ -737,6 +810,16 @@ export default function App() {
     </>
   );
 
+  // Usernames of the selected event's ticket holders, so the host sees names, not wallet codes.
+  // Wallets without one are stored as "" so they aren't fetched again on every refresh.
+  const holdersKey = hostEv ? [...new Set(ticketsOf(hostEv).map((t) => t.account.owner.toBase58()))].sort().join(",") : "";
+  useEffect(() => {
+    const want = holdersKey.split(",").filter((a) => a && !(a in names));
+    if (!want.length) return;
+    fetch(`/api/username?addresses=${want.join(",")}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+      .then((j: Record<string, string>) => setNames((n) => ({ ...n, ...Object.fromEntries(want.map((a) => [a, j[a] ?? ""])) })));
+  }, [holdersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Events the signed-in wallet organizes: sales, buyer link, delete, tickets, check-in and the gate.
   const myEventsView = (
     <>
@@ -747,7 +830,7 @@ export default function App() {
             {myEvents.map((ev) => <EventRow key={ev.publicKey.toBase58()} ev={ev} perks={perksOf(ev)} active={ev === hostEv} onClick={() => setHostSel(ev.publicKey.toBase58())} />)}
           </div>
         )}
-        {hostEv && <p className="break-all text-sm text-zinc-500">Buyer link: <code>?event={hostEv.publicKey.toBase58()}</code></p>}
+        {hostEv && <CopyLink path={`/?event=${hostEv.publicKey.toBase58()}`} />}
         {hostEv && (hostEv.account.sold === 0
           ? <button className={btn2} disabled={busy} onClick={() => deleteEvent(hostEv)}>Delete event</button>
           : <p className="text-base text-zinc-400">Tickets are sold, so this event can&apos;t be deleted.</p>)}
@@ -755,31 +838,7 @@ export default function App() {
       {hostEv && (
         <section className={`${card} space-y-3`}>
           <h2 className={h2}>Tickets for {parseName(hostEv.account.name).name}</h2>
-          {(() => {
-            const ts = ticketsOf(hostEv), n = hostEv.account.sold;
-            const stat = (label: string, v: string | number) => <div className="rounded-lg border border-white/10 p-3"><div className="text-2xl font-bold tabular-nums">{v}</div><div className="text-base text-zinc-400">{label}</div></div>;
-            return (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {stat("Sold", `${n} / ${hostEv.account.maxSupply}`)}
-                {stat("Ticket sales", usd(hostEv.account.facePrice.muln(n)))}
-                {stat("Checked in", ts.filter((t) => t.account.used).length)}
-                {stat("Listed for resale", ts.filter((t) => t.account.listed).length)}
-              </div>
-            );
-          })()}
-          {ticketsOf(hostEv).length === 0 ? <p className="text-zinc-400">None sold yet.</p> : (
-            <div className={rows}>
-              {ticketsOf(hostEv).map((t) => (
-                <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
-                  <span className="tabular-nums"><span className="text-zinc-400">#{t.account.ticketId}</span> <span className="font-mono text-sm">{short(t.account.owner)}</span></span>
-                  <div className="flex items-center gap-4">
-                    <Status t={t.account} />
-                    {!t.account.used && <button className={btn2} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <SalesPanel ev={hostEv} tickets={ticketsOf(hostEv)} busy={busy} whoIs={whoIs} onCheckIn={(t) => checkIn(t, hostEv)} />
         </section>
       )}
       <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket, t.owner)])} />
