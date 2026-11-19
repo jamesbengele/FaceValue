@@ -1,13 +1,13 @@
 # FaceValue — Pitch (3 min + 1 min Q&A)
 
-**Track:** Consumer Apps · **Chain:** Solana devnet · **When:** Wed Nov 4, 7 PM, Busch Honor Room
-**Speakers:** Partner A (problem + why onchain), Partner B (live demo + what's next)
+**Track:** Consumer Apps · **Chain:** Solana devnet · **Event:** UBC Hackathon demo, Nov 20
+**Speakers:** Speaker A (problem + why onchain), Speaker B (live demo + what's next)
 
 > **The line the judges should leave with:** *Try to resell a $50 ticket for $80 and the blockchain rejects it. List it at $50 and it sells instantly.*
 
 ---
 
-## 0:00–0:30 · The problem (Partner A) · Slide 1 "Problem"
+## 0:00–0:30 · The problem (Speaker A) · Slide 1 "Problem"
 
 > "Raise your hand if you've ever paid way too much for a student ticket, or just stayed home.
 >
@@ -17,11 +17,11 @@
 
 **Slide 1:** big "$50 → $300", a screenshot-style mock of a group-chat resale post, one line: *"The cap lives in a terms-of-service page. The ticket ignores it."*
 
-## 0:30–1:00 · The idea + why it needs a blockchain (Partner A) · Slides 2–3
+## 0:30–1:00 · The idea + why it needs a blockchain (Speaker A) · Slides 2–3
 
 > "FaceValue moves the rule **into the ticket itself**.
 >
-> Every ticket is an account owned by our Solana program. The only way to change who owns it is our resale instruction, and that instruction has one line in it: *price must be less than or equal to face value.* Not a policy. Code. Nobody can override it, including us.
+> Every ticket is an account owned by our Solana program. The only way to change who owns it is our resale instruction, and that instruction has one line in it: *price must be less than or equal to face value.* Not a policy. Code. Once we lock upgrades, nobody can override it, including us.
 >
 > Two more things fall out of that for free. Payment and transfer happen in **one atomic transaction**, so the buyer can't get a fake ticket and the seller can't get stiffed. And ownership is public, so the gate can check it."
 
@@ -38,11 +38,11 @@
 
 **Hand-off line:** *"Don't take my word for it. Here's what happens when a scalper tries."*
 
-## 1:00–2:30 · Live demo (Partner B)
+## 1:00–2:30 · Live demo (Speaker B)
 
 Run [`DEMO.md`](./DEMO.md) exactly. It's timed at ~90 seconds. The pause after the red banner is the most important beat of the whole pitch.
 
-## 2:30–3:00 · What's next (Partner B) · Slide 4 "Next"
+## 2:30–3:00 · What's next (Speaker B) · Slide 4 "Next"
 
 > "This week we also shipped USDC-style payments, so $50 always means $50, a rotating code at the gate signed by the owner's wallet, organizer royalties on every resale, and email sign-in with embedded wallets, so no student ever sees a seed phrase.
 >
@@ -59,7 +59,7 @@ Run [`DEMO.md`](./DEMO.md) exactly. It's timed at ~90 seconds. The pause after t
 
 ## Judge Q&A (1 min) — prepared answers
 
-Keep each answer to two sentences. Partner A takes "why" questions, Partner B takes "how" questions.
+Keep each answer to two sentences. Speaker A takes "why" questions, Speaker B takes "how" questions.
 
 | If they ask… | Say… |
 |---|---|
@@ -70,8 +70,11 @@ Keep each answer to two sentences. Partner A takes "why" questions, Partner B ta
 | **"Can't the seller and buyer add a side payment in the same transaction?"** | "Yes. Two people who agree in private can always pay each other, onchain or on Venmo. What the program removes is the public market above face: every listing anyone can see is at face or below, and anyone can take it." |
 | **"Who's the customer?"** | "Student orgs and campus venues issuing tickets. They want real fans in the seats, not scalper profits." |
 | **"Couldn't someone just transfer the NFT on another marketplace?"** | "That's exactly why it's not a normal NFT. The ticket is an account our program owns, and the only instruction that changes its owner enforces the cap." |
-| **"What stops a bot from buying them all at face?"** | "Today, nothing beyond supply. Per-wallet limits and verified student sign-in are next. But even if a bot buys, it can't profit, so the incentive is gone." |
-| **"Can the cap be bypassed by a future update?"** | "The resale instruction re-checks the cap itself, so even a new listing path can't sneak a higher price through. For production we'd make the program immutable or put upgrades behind the student orgs." |
+| **"What stops a bot from buying them all at face?"** | "Bots can buy tickets; they can't fake showing up. Organizers can give fans with enough onchain check-ins a fans-only presale and a discount, so real attendees get first access. And even if a bot buys, it can't resell above face, so the profit is gone. Per-wallet presale limits are next." |
+| **"Can the cap be bypassed by a future update?"** | "The resale instruction re-checks the cap itself, so even a new listing path can't sneak a higher price through. Today the deployer can still upgrade it on devnet. Once we lock upgrades (freeze the program, or put the upgrade key behind the student orgs), the cap can't be changed by anyone, us included." |
+| **"Can't someone resell off-platform, or gift a ticket and get paid on the side?"** | "Yes: a ticket sold or handed over outside the app, for cash or anything else, can't be stopped by code, and we don't demo gifting for that reason. What we control is the public market: every listing is at face or below, and the rotating gate code makes handing a live ticket to a stranger a trust risk." |
+| **"What if two people buy at the same instant?"** | "New tickets are numbered by a counter, so simultaneous buyers collide: one wins, the rest retry. Fine for a demo; a real on-sale needs a program change (SPEC §7)." |
+| **"Can one person grab all the presale spots?"** | "The fans-only presale checks check-ins, not a per-wallet limit, so one qualified wallet can buy up to the per-transaction maximum. Per-wallet limits are next." |
 
 ## Speaker reminders
 

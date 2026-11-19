@@ -12,7 +12,7 @@
 2. **(20 s) Seller:** set the price to **80**, List for resale. Red banner: **Blocked by the ticket itself.** No signing prompt appears. *"On StubHub this would list. Here, the ticket refuses."* Pause.
 3. **(15 s) Seller:** list at **50**; it appears in Resale market.
 4. **(20 s) Buyer:** Buy. Ticket moves; Seller gets $47.50, the organizer gets $2.50, one transaction. Open the Explorer link. *"Payment, royalty and ticket moved together."*
-5. **(20 s) Buyer:** Show gate code (one signature). Organizer: paste the code into Gate, Verify & check in. Status: Used. *"A screenshot is useless a minute later."*
+5. **(20 s) Buyer:** Show gate code (one signature). Scan its QR with a phone camera: the /check page shows the ticket as valid. Organizer: paste the code into Gate, Verify & check in. Status: Used. *"A screenshot is useless a minute later."*
 
 ## Optional "fresh user" segment (email sign-in)
 Open the app in a fresh profile, **Sign in with email**, enter the code, it auto-gets test funds. Buy a ticket with no wallet installed.

@@ -5,7 +5,7 @@ import { SystemProgram, PublicKey, TransactionInstruction } from "@solana/web3.j
 import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { useAppWallet } from "@/lib/privyWallet";
-import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountPda, eventPda, fanPda, infoPda, makeProgram, perksPda, presalePda, programId, ticketPda } from "@/lib/program";
+import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountPda, eventPda, fanPda, infoPda, makeProgram, perksPda, programId, ticketPda } from "@/lib/program";
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, SimError, UiError, toUiError } from "@/lib/errors";
@@ -324,19 +324,10 @@ export default function App() {
   };
 
   // Every action: build instructions, simulate, and only then ask the wallet to sign.
-  const legacyPresale = useRef(false);
   async function run(text: string, build: () => Promise<TransactionInstruction[]>, ev?: Row<EventAcc>): Promise<boolean> {
     setBusy(true); setErr(null); setToast(null); setErrFace(ev && usd(ev.account.facePrice));
     try {
-      const send = async () => simulateThenSend(connection, wallet, await build());
-      let sig: string;
-      try { sig = await send(); }
-      catch (e) {
-        // The deployed program predates set_perks and wants the old presale address: switch once and retry.
-        if (legacyPresale.current || !(e instanceof SimError && e.logs.some((l) => l.includes("caused by account: presale")))) throw e;
-        legacyPresale.current = true;
-        sig = await send();
-      }
+      const sig = await simulateThenSend(connection, wallet, await build());
       setToast({ sig, text });
       await load();
       return true;
@@ -363,7 +354,7 @@ export default function App() {
     return Promise.all(Array.from({ length: n }, (_, i) => program.methods.buyTicket().accounts({
       buyer, event: e, ticket: ticketPda(e, fresh.sold + i), buyerToken, treasury: ev.account.treasury,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
-      perks: legacyPresale.current ? presalePda(e) : perksPda(e), fanPass: fanPda(ev.account.organizer, buyer), discount: discountPda(e, buyer),
+      perks: perksPda(e), fanPass: fanPda(ev.account.organizer, buyer), discount: discountPda(e, buyer),
     }).instruction()));
   }, ev);
 
@@ -413,6 +404,8 @@ export default function App() {
 
   const infoOf = (ev: Row<EventAcc>) => infos.find((i) => i.account.event.equals(ev.publicKey))?.account;
 
+  // Gifting is hidden for the demo (off-platform resale Q&A); the program still supports it. Flip to re-enable.
+  const SHOW_GIFTING = false;
   // Gift: the program refuses used or listed tickets; no payment, so there is no price to cap.
   const give = (t: Row<TicketAcc>) => run("Ticket sent", async () => {
     let to: PublicKey;
@@ -578,7 +571,7 @@ export default function App() {
     <>
       <section className={`${card} space-y-5`}>
         <h2 className={h2}>My tickets</h2>
-        {pk && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
+        {pk && <p className="break-all text-base text-zinc-400">Your wallet address{SHOW_GIFTING ? " (give it to friends so they can send you tickets)" : ""}: <code>{pk.toBase58()}</code></p>}
         {mine.length === 0 && <p className="text-zinc-400">No tickets yet.</p>}
         <div className="space-y-6 [&>*+*]:border-t [&>*+*]:border-white/10 [&>*+*]:pt-6">
           {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
@@ -651,7 +644,7 @@ export default function App() {
                             </div>
                           </details>
                         ))}
-                        {g.status === "owned" && (() => { const t = g.rows[0], k = t.publicKey.toBase58(); return (
+                        {SHOW_GIFTING && g.status === "owned" && (() => { const t = g.rows[0], k = t.publicKey.toBase58(); return (
                           <div className="flex flex-wrap items-center gap-2">
                             <input className={`${input} !w-72 max-w-full`} placeholder="Friend's wallet address" aria-label="Send one ticket to a friend" value={giveTo[k] ?? ""} onChange={(e) => setGiveTo({ ...giveTo, [k]: e.target.value })} />
                             <button className={btn2} disabled={busy || !giveTo[k]} onClick={() => give(t)}>{n > 1 ? "Send 1 to a friend" : "Send to a friend"}</button>
