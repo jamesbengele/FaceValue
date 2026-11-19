@@ -45,8 +45,8 @@ function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal;
   const item = "block w-full rounded-lg px-3 py-2.5 text-left text-base hover:bg-white/[0.06]";
   return (
     <div ref={ref} className="relative">
-      <button className={`${btn2} flex items-center gap-2 whitespace-nowrap !px-3 font-mono !text-sm`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
-        {short(pk)}<Icon name="chevron" className="h-4 w-4" />
+      <button className={`${btn2} flex items-center justify-center !px-2.5`} aria-label="Settings and accounts" title="Settings" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
+        <Icon name="settings" className={`h-6 w-6 transition-transform duration-300 ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
         <div role="menu" className="surface absolute right-0 z-30 mt-2 w-72 rounded-xl border border-white/10 p-2 shadow-xl">
@@ -571,7 +571,7 @@ export default function App() {
     <>
       <section className={`${card} space-y-5`}>
         <h2 className={h2}>My tickets</h2>
-        {pk && <p className="break-all text-base text-zinc-400">Your wallet address{SHOW_GIFTING ? " (give it to friends so they can send you tickets)" : ""}: <code>{pk.toBase58()}</code></p>}
+        {pk && SHOW_GIFTING && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
         {mine.length === 0 && <p className="text-zinc-400">No tickets yet.</p>}
         <div className="space-y-6 [&>*+*]:border-t [&>*+*]:border-white/10 [&>*+*]:pt-6">
           {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
