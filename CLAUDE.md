@@ -1,6 +1,6 @@
 # UBC Hackathon: FaceValue rebuild
 
-Plan and brief live in [WHATS-NEXT-PROMPT.md](WHATS-NEXT-PROMPT.md). Read it once per session; don't restate it here or in subagent briefs beyond what that subagent needs.
+Spec is [SPEC.md](SPEC.md); README has deploy and run. Don't restate either in subagent briefs beyond what that subagent needs.
 
 ## Ownership
 Treat this as your own project: fix root causes, keep it tidy, finish what you start, and say plainly what is unverified. The deadline is Nov 20.
@@ -14,7 +14,7 @@ Treat this as your own project: fix root causes, keep it tidy, finish what you s
 ## Fresh-code rule (hard)
 Only `SPEC.md`, `docs/DEMO.md` and `docs/PITCH.md` may be read or copied from `C:\Users\James b\Documents\Hackathon Practice`. Never touch its `program/`, `app/` or `idl/`. Say this in every subagent brief. Never set commit dates by hand.
 
-## Layout (in the new repo, not this folder)
+## Layout
 ```
 SPEC.md        source of truth, revised before code
 README.md      deploy and run

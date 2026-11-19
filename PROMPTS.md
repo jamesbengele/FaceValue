@@ -16,7 +16,7 @@ Outcome: app builds. Review found one bug: `\b` inside a template-literal RegExp
 Brief: SPEC §7: gate.ts pure functions, signMessage in the wallet seam, holder QR/code with 30 s rotation, organizer gate (paste + BarcodeDetector), onchain re-fetch before check_in, node:assert tests. Outcome: build and `test:gate` pass; reviewed gate.ts and Gate.tsx by reading, no defects found. Phantom signMessage and camera unverified.
 
 ## Verification log
-- Program deployed from Playground wallet to devnet (program id 2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G, 314,448 bytes). Public-RPC rate limits made the upload take about 25 min.
+- Program deployed from Playground wallet to devnet (first program id 2NXBG5xSwYk89Z1iBN8YhKMjrX2WKXCxhBUbXLxRJz6G, 314,448 bytes; later redeployed as 9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2, the id the app now uses). Public-RPC rate limits made the upload take about 25 min.
 - `mocha` suite against devnet: 10 passing (incl. test 3 PriceAboveFace, test 5 exact-ask split, test 10 rounding).
 - Demo event created on devnet: mint AsTAYEnPr1vnwSUY1UiZuuS2fSw7F6qN3BUHNUGtUQw1, event HGzK3Z4JAppGLFrKAEDM7g2gUKp7AXVyPLukqcsFr6iK.
 
@@ -29,3 +29,14 @@ What broke / was corrected:
 - Auto mode blocked stopping the `next dev` server on port 3000 (needed before `npm run build`); it ran until James approved it in the thread.
 - `README.md` line 8 first came out with a duplicated "Next.js app." after the IDL path edit; fixed before committing.
 - Not verified: the Privy confirm prompt (Group 7), and every email-signed-in flow in the app.
+
+## 6. Later feature rounds (PRs 1-14 and after)
+Briefs: account balance, usernames (Redis store on Vercel), multi-event and my-events, fan loyalty and perks (`set_perks`), event details, buy up to 4 tickets, sold-out/ended states, phone-scannable `/check` QR with 10 s codes, landing page, hide events priced in old test tokens.
+What broke / was corrected:
+- The deployed program lagged the app (no perks yet), so a presale-address fallback was added to make Buy work, then dropped once the redeploy had perks.
+- Old events priced in earlier test tokens showed up in the list; they are now hidden and the no-token buy error is clearer.
+- Usernames wrote to local disk and failed on Vercel; moved to Redis with a /tmp fallback.
+
+## 7. Pre-submission review fixes (Nov 19)
+Brief: apply a ranked review before the demo. Gifting is hidden in the UI (the program still has `transfer_ticket`) and covered by a Q&A answer; the pitch says "once we lock upgrades"; `/api/drip` got a global hourly cap; docs now match the app (phone QR scan in DEMO, one-line pitch and Explorer link in README).
+Not verified: the drip cap under load, and a build with these edits (dev server was running).

@@ -15,6 +15,9 @@ export const runtime = "nodejs";
 const RPC = process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
 const SOL_MIN = 0.02 * 1e9, SOL_SEND = 0.03 * 1e9, USDC_MIN = 50_000_000, USDC_MINT = 200_000_000;
 const lastDrip = new Map<string, number>();
+// shortcut: global cap per process (resets on restart, per serverless instance) so a script can't drain the funding key; replace with Privy token auth.
+const GLOBAL_MAX = 40, GLOBAL_WINDOW_MS = 3_600_000;
+let globalSends: number[] = [];
 
 function serverKey(): Keypair {
   const raw = process.env.DRIP_KEYPAIR_JSON
@@ -50,6 +53,9 @@ export async function POST(req: Request) {
     // The cooldown guards only the send. Keep the check and the set together, with no await between them.
     const wait = 60_000 - (Date.now() - (lastDrip.get(key) ?? 0));
     if (wait > 0) return NextResponse.json({ error: `Try again in ${Math.ceil(wait / 1000)}s` }, { status: 429 });
+    globalSends = globalSends.filter((t) => Date.now() - t < GLOBAL_WINDOW_MS);
+    if (globalSends.length >= GLOBAL_MAX) return NextResponse.json({ error: "Test funds are busy, try again later" }, { status: 429 });
+    globalSends.push(Date.now());
     lastDrip.set(key, Date.now());
     try {
       const tx = new Transaction();
@@ -58,7 +64,7 @@ export async function POST(req: Request) {
       if (gaveUsdc) tx.add(createMintToInstruction(mint, ata, kp.publicKey, USDC_MINT));
       const signature = await sendAndConfirmTransaction(conn, tx, [kp]);
       return NextResponse.json({ ok: true, sol: gaveSol, usdc: gaveUsdc, signature });
-    } catch (e) { lastDrip.delete(key); throw e; }
+    } catch (e) { lastDrip.delete(key); globalSends.pop(); throw e; }
   } catch (e: any) {
     console.error("drip failed:", e?.message ?? "unknown"); // message only, never key material
     return NextResponse.json({ error: "Drip failed" }, { status: 500 });

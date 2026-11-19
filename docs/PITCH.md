@@ -21,7 +21,7 @@
 
 > "FaceValue moves the rule **into the ticket itself**.
 >
-> Every ticket is an account owned by our Solana program. The only way to change who owns it is our resale instruction, and that instruction has one line in it: *price must be less than or equal to face value.* Not a policy. Code. Nobody can override it, including us.
+> Every ticket is an account owned by our Solana program. The only way to change who owns it is our resale instruction, and that instruction has one line in it: *price must be less than or equal to face value.* Not a policy. Code. Once we lock upgrades, nobody can override it, including us.
 >
 > Two more things fall out of that for free. Payment and transfer happen in **one atomic transaction**, so the buyer can't get a fake ticket and the seller can't get stiffed. And ownership is public, so the gate can check it."
 
@@ -71,7 +71,10 @@ Keep each answer to two sentences. Partner A takes "why" questions, Partner B ta
 | **"Who's the customer?"** | "Student orgs and campus venues issuing tickets. They want real fans in the seats, not scalper profits." |
 | **"Couldn't someone just transfer the NFT on another marketplace?"** | "That's exactly why it's not a normal NFT. The ticket is an account our program owns, and the only instruction that changes its owner enforces the cap." |
 | **"What stops a bot from buying them all at face?"** | "Today, nothing beyond supply. Per-wallet limits and verified student sign-in are next. But even if a bot buys, it can't profit, so the incentive is gone." |
-| **"Can the cap be bypassed by a future update?"** | "The resale instruction re-checks the cap itself, so even a new listing path can't sneak a higher price through. For production we'd make the program immutable or put upgrades behind the student orgs." |
+| **"Can the cap be bypassed by a future update?"** | "The resale instruction re-checks the cap itself, so even a new listing path can't sneak a higher price through. Today the deployer can still upgrade it on devnet. Once we lock upgrades (freeze the program, or put the upgrade key behind the student orgs), the cap can't be changed by anyone, us included." |
+| **"Can't someone resell off-platform, or gift a ticket and get paid on the side?"** | "Yes: a ticket sold or handed over outside the app, for cash or anything else, can't be stopped by code, and we don't demo gifting for that reason. What we control is the public market: every listing is at face or below, and the rotating gate code makes handing a live ticket to a stranger a trust risk." |
+| **"What if two people buy at the same instant?"** | "New tickets are numbered by a counter, so simultaneous buyers collide: one wins, the rest retry. Fine for a demo; a real on-sale needs a program change (SPEC §7)." |
+| **"Can one person grab all the presale spots?"** | "The fans-only presale checks check-ins, not a per-wallet limit, so one qualified wallet can buy up to the per-transaction maximum. Per-wallet limits are next." |
 
 ## Speaker reminders
 

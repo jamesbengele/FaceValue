@@ -404,6 +404,8 @@ export default function App() {
 
   const infoOf = (ev: Row<EventAcc>) => infos.find((i) => i.account.event.equals(ev.publicKey))?.account;
 
+  // Gifting is hidden for the demo (off-platform resale Q&A); the program still supports it. Flip to re-enable.
+  const SHOW_GIFTING = false;
   // Gift: the program refuses used or listed tickets; no payment, so there is no price to cap.
   const give = (t: Row<TicketAcc>) => run("Ticket sent", async () => {
     let to: PublicKey;
@@ -569,7 +571,7 @@ export default function App() {
     <>
       <section className={`${card} space-y-5`}>
         <h2 className={h2}>My tickets</h2>
-        {pk && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
+        {pk && <p className="break-all text-base text-zinc-400">Your wallet address{SHOW_GIFTING ? " (give it to friends so they can send you tickets)" : ""}: <code>{pk.toBase58()}</code></p>}
         {mine.length === 0 && <p className="text-zinc-400">No tickets yet.</p>}
         <div className="space-y-6 [&>*+*]:border-t [&>*+*]:border-white/10 [&>*+*]:pt-6">
           {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
@@ -642,7 +644,7 @@ export default function App() {
                             </div>
                           </details>
                         ))}
-                        {g.status === "owned" && (() => { const t = g.rows[0], k = t.publicKey.toBase58(); return (
+                        {SHOW_GIFTING && g.status === "owned" && (() => { const t = g.rows[0], k = t.publicKey.toBase58(); return (
                           <div className="flex flex-wrap items-center gap-2">
                             <input className={`${input} !w-72 max-w-full`} placeholder="Friend's wallet address" aria-label="Send one ticket to a friend" value={giveTo[k] ?? ""} onChange={(e) => setGiveTo({ ...giveTo, [k]: e.target.value })} />
                             <button className={btn2} disabled={busy || !giveTo[k]} onClick={() => give(t)}>{n > 1 ? "Send 1 to a friend" : "Send to a friend"}</button>
