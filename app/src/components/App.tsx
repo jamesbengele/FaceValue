@@ -14,6 +14,7 @@ import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
 import Landing from "./Landing";
+import Footer, { LogoMark } from "./Footer";
 import { SavedAccount, useSavedAccounts } from "@/lib/savedAccounts";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
@@ -847,8 +848,8 @@ export default function App() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-28 pt-4 sm:px-6 md:pb-12 md:pt-6">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl">FaceValue</h1>
+      <header className="boxed flex items-center justify-between gap-3 py-2 pl-3 pr-2 sm:pl-4">
+        <a href="/" className="flex items-center gap-2.5" aria-label="FaceValue home"><LogoMark className="h-7 w-auto" /><h1 className="font-display text-2xl">FaceValue</h1></a>
         <div className="flex items-center gap-2">
           {pk && bal !== null && bal !== "error" && bal.usd && <span className="hidden text-base text-zinc-400 tabular-nums sm:inline">{bal.usd}</span>}
           <ThemeToggle />
@@ -889,6 +890,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <Footer />
 
       {/* Short-lived notices: bottom right on desktop, above the tab bar on phones. */}
       <div className="pointer-events-none fixed inset-x-4 bottom-20 z-20 flex flex-col items-center gap-2 md:inset-x-auto md:bottom-6 md:right-6 md:items-end">

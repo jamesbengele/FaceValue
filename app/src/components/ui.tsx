@@ -1,8 +1,8 @@
 // Shared look. One filled button per screen (`btn`, the main action); everything else is `btn2` or plain text.
-export const btn = "btn-primary rounded-lg px-4 py-2.5 text-base font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
-export const btn2 = "rounded-lg border border-white/15 px-4 py-2.5 text-base font-medium transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40";
-export const card = "rounded-xl border border-white/10 bg-white/[0.04] p-5 sm:p-6";
-export const input = "w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-base outline-none focus:border-white/40";
+export const btn = "btn-primary rounded-[4px] px-4 py-2.5 text-base font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
+export const btn2 = "btn-outline rounded-[4px] px-4 py-2.5 text-base font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
+export const card = "boxed p-5 sm:p-6";
+export const input = "w-full rounded-[4px] border-[1.5px] border-[var(--ink-line)] bg-[var(--field)] px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-[var(--accent)]";
 export const h2 = "text-xl font-semibold";
 // Rows separated by thin lines, no line above the first.
 export const rows = "[&>*+*]:border-t [&>*+*]:border-white/10";

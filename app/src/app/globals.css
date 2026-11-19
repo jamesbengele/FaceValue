@@ -72,3 +72,86 @@ html[data-theme="light"] .scalp-range { background: rgba(27, 23, 48, 0.12); }
 /* bg-white/10 tracks and chips on light backgrounds. */
 html[data-theme="light"] [class*="bg-white/10"] { background-color: rgba(27, 23, 48, 0.08); }
 html[data-theme="light"] [class*="divide-white/10"] > * { border-color: rgba(27, 23, 48, 0.12); }
+
+/* ---- Site footer: pale lime card, dark ticker band with a ticket-stub notched top ---- */
+:root { --page-bg: #0b0a12; --footer-bg: #d9f99d; --footer-ink: #0b0a12; --ticker-fg: #c6ff3d; }
+html[data-theme="light"] { --page-bg: #f7f5fb; --footer-bg: #e3f7b5; --footer-ink: #1b1730; --ticker-fg: #c6ff3d; }
+.site-footer { background: var(--footer-bg); color: var(--footer-ink); border-radius: 28px; overflow: hidden; }
+.site-footer .ticker { background: var(--footer-ink); color: var(--ticker-fg); }
+.site-footer .ticker-dot { font-size: 0.6em; opacity: 0.8; }
+/* Half-circle notches along the top, like a torn ticket stub. */
+.ticket-edge { height: 12px; background: radial-gradient(circle at 12px 0, var(--page-bg) 7px, var(--footer-ink) 7.5px) 0 0 / 24px 12px repeat-x; }
+.ticker-track { animation: ticker 32s linear infinite; }
+@keyframes ticker { to { transform: translateX(-50%); } }
+.footer-muted { opacity: 0.6; }
+.footer-rule { border-color: rgba(11, 10, 18, 0.15); }
+.footer-cta { background: var(--footer-ink); color: var(--footer-bg); transition: transform 0.15s ease; }
+.footer-cta:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }
+/* The hero glow bleeds past the right edge; clip it instead of widening the page. */
+.landing { overflow-x: clip; }
+/* Ticker band in bright lime so the notches (page color) read in both themes. */
+.site-footer .ticker { background: var(--ticker-band); color: var(--ticker-ink); }
+:root { --ticker-band: #c6ff3d; --ticker-ink: #0b0a12; --footer-bg: #eefcd3; }
+html[data-theme="light"] { --ticker-band: #c6ff3d; --ticker-ink: #1b1730; --footer-bg: #e9f8c8; }
+.ticket-edge { background: radial-gradient(circle at 12px 0, var(--page-bg) 7px, var(--ticker-band) 7.5px) 0 0 / 24px 12px repeat-x; }
+
+/* ---- Outlined "paper" style: crisp ink borders, pastel art panels (matches the footer) ---- */
+:root {
+  --ink-line: rgba(236, 233, 245, 0.78); --paper: #15131f; --field: #0e0d16;
+  --art-ink: #17153a; --art-paper: #fbfaff; --art-pink: #f5c6e4; --art-lilac: #d4cdf8; --art-mint: #c3eedc; --art-yellow: #fbe38a;
+}
+html[data-theme="light"] { --ink-line: #17153a; --paper: #fbfaff; --field: #ffffff; --page-bg: #f6e9f1; --primary-bg: #17153a; --primary-fg: #ffffff; }
+html[data-theme="light"] body { background: var(--page-bg); color: #17153a; }
+.boxed { background: var(--paper); border: 1.5px solid var(--ink-line); border-radius: 4px; }
+.btn-outline { border: 1.5px solid var(--ink-line); }
+.btn-outline:not(:disabled):hover { background: var(--nav-active); }
+.panel-pink { background: var(--art-pink); }
+.panel-lilac { background: var(--art-lilac); }
+.panel-mint { background: var(--art-mint); }
+.panel-yellow { background: var(--art-yellow); }
+.art-ink { color: var(--art-ink); }
+.art-ink-soft { color: var(--art-ink); opacity: 0.65; }
+.art-cta { background: var(--art-ink); color: #fff; border-radius: 4px; transition: transform 0.15s ease; }
+.art-cta:not(:disabled):hover { transform: translateY(-2px); }
+.float-art { animation: floaty 6s ease-in-out infinite; }
+@keyframes floaty { 50% { transform: translateY(-8px) rotate(-1deg); } }
+.site-footer { border: 1.5px solid var(--ink-line); border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .float-art { animation: none; } }
+.boxed { --logo-cut: var(--paper); }
+
+/* ---- 3D holographic hero ticket ---- */
+@property --rx { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+@property --ry { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+.holo-scene { perspective: 1100px; touch-action: pan-y; }
+.holo-ticket { position: relative; width: min(100%, 460px); aspect-ratio: 2 / 1; container-type: inline-size; transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(var(--ry)); transition: transform 0.6s cubic-bezier(.2, .8, .2, 1); }
+.holo-ticket[data-active="1"] { transition: transform 0.12s ease-out; }
+.holo-ticket[data-active="0"] { animation: holo-idle 7s ease-in-out infinite; }
+@keyframes holo-idle { 0%, 100% { --rx: 6deg; --ry: -12deg; } 50% { --rx: -4deg; --ry: 12deg; } }
+.holo-ticket::after { content: ""; position: absolute; inset: auto 8% -14% 8%; height: 18%; border-radius: 50%; background: rgba(23, 21, 58, 0.28); filter: blur(14px); transform: translateZ(-60px); z-index: -1; }
+.holo-body { position: absolute; inset: 0; overflow: hidden; }
+.holo-base { position: absolute; inset: 0; background: linear-gradient(135deg, #f7c9e6 0%, #d8d0fa 48%, #c6f0de 100%); }
+.holo-foil { position: absolute; inset: 0; opacity: 0.55; mix-blend-mode: color-dodge; transition: opacity 0.3s;
+  background: repeating-linear-gradient(115deg, #ff7fd4 0%, #8fd3ff 8%, #a8ff8f 16%, #ffe27a 24%, #ff7fd4 32%),
+              repeating-linear-gradient(65deg, rgba(255,255,255,0.0) 0 6px, rgba(255,255,255,0.35) 6px 7px);
+  background-size: 260% 260%, 100% 100%; background-position: var(--foil, 30% 40%), 0 0; }
+.holo-ticket[data-active="1"] .holo-foil { opacity: 0.8; }
+.holo-glare { position: absolute; inset: 0; mix-blend-mode: overlay; opacity: 0.9;
+  background: radial-gradient(circle at var(--px, 35%) var(--py, 25%), rgba(255,255,255,0.95), rgba(255,255,255,0) 45%); }
+.holo-text { position: absolute; left: 6.5%; top: 11%; width: 62%; height: 78%; display: flex; flex-direction: column; color: var(--art-ink); }
+.holo-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 2.8cqw; opacity: 0.75; }
+.holo-title { font-family: var(--font-display), sans-serif; font-weight: 800; letter-spacing: -0.03em; font-size: 6.6cqw; line-height: 1.02; margin-top: 1.2cqw; }
+.holo-sub { font-size: 3.1cqw; opacity: 0.8; margin-top: 0.8cqw; }
+.holo-seats { display: flex; gap: 4cqw; margin-top: 2.6cqw; }
+.holo-seats span { display: flex; flex-direction: column-reverse; font-family: ui-monospace, monospace; font-size: 2.3cqw; opacity: 0.85; }
+.holo-seats b { font-family: var(--font-display), sans-serif; font-size: 4.6cqw; line-height: 1; opacity: 1; }
+.holo-price { margin-top: auto; font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 9.5cqw; line-height: 0.9; letter-spacing: -0.03em; }
+.holo-price span { display: block; font-family: ui-monospace, monospace; font-weight: 400; font-size: 2.4cqw; letter-spacing: 0; opacity: 0.75; margin-top: 0.8cqw; }
+@media (prefers-reduced-motion: reduce) { .holo-ticket[data-active="0"] { animation: none; } }
+/* Tuning: colored foil instead of a white wash, and text that fits one line. */
+.holo-foil { mix-blend-mode: overlay; opacity: 0.75; }
+.holo-ticket[data-active="1"] .holo-foil { opacity: 1; }
+.holo-glare { mix-blend-mode: soft-light; }
+.holo-title { font-size: 5.6cqw; white-space: nowrap; }
+.holo-price { font-size: 8cqw; }
