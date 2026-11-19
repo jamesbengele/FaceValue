@@ -13,6 +13,7 @@ import { DEMO_MINT, EVENT_ADDRESS, explorerTx } from "@/lib/config";
 import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
+import Landing from "./Landing";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
@@ -770,7 +771,7 @@ export default function App() {
   return (
     <main className="mx-auto max-w-5xl px-4 pb-28 pt-4 sm:px-6 md:pb-12 md:pt-6">
       <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold tracking-tight">FaceValue</h1>
+        <h1 className="font-display text-2xl">FaceValue</h1>
         <div className="flex items-center gap-2">
           {pk && bal !== null && bal !== "error" && bal.usd && <span className="hidden text-base text-zinc-400 tabular-nums sm:inline">{bal.usd}</span>}
           <ThemeToggle />
@@ -779,11 +780,7 @@ export default function App() {
       </header>
 
       {!pk ? (
-        <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
-          <h2 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Tickets that can&apos;t be scalped.</h2>
-          <p className="mt-4 text-lg text-zinc-400">Resale is capped at face value by the ticket itself, and fans who show up get first pick next time.</p>
-          <button className={`${btn} mt-8`} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in with email</button>
-        </section>
+        <Landing ready={!!wallet.emailAuth?.ready} onSignIn={() => wallet.emailAuth?.login()} />
       ) : !namesTried ? (
         <p className="mt-10 text-center text-zinc-400">Loading…</p>
       ) : namesLoaded && !names[pk.toBase58()] ? (
