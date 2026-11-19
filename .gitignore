@@ -6,3 +6,5 @@ target/
 test-ledger/
 !.env.example
 .data/
+docs/DEMO.md
+docs/PITCH.md

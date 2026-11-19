@@ -264,7 +264,7 @@ describe("facevalue", function () {
   });
 
   it("13. check_in names the owner the gate saw -> OwnerChanged", async () => {
-    const e = await createEvt(eventId + 6, "Gate Race", FACE, 0, 1);
+    const e = await createEvt(eventId + 10, "Gate Race", FACE, 0, 1);
     const t = await buy(A, aTok, e);
     await expectErr("OwnerChanged", checkIn(organizer, e, t, B.publicKey));
     assert.isFalse((await p.account.ticket.fetch(t)).used);

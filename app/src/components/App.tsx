@@ -343,8 +343,8 @@ export default function App() {
       setFanPasses(pk ? await at<FanPassAcc>("fanPass", orgs.map((o) => fanPda(o, pk))) : []);
     } catch { /* keep the last good values */ }
   }, [program, pk]);
-  // Poll so other windows see new events, listings and sales without a reload.
-  useEffect(() => { if (!pk) return; load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load, pk]);
+  // Poll so other windows see new events, listings and sales without a reload. Hidden tabs skip it: every tab shares one RPC key.
+  useEffect(() => { if (!pk) return; load(); const t = setInterval(() => { if (!document.hidden) load(); }, 15_000); return () => clearInterval(t); }, [load, pk]);
 
   // Soonest dated event first; undated ones last, newest first.
   const buyable = (e: Row<EventAcc>) => !DEMO_MINT || e.account.mint.toBase58() === DEMO_MINT;
