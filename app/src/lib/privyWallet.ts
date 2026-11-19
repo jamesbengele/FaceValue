@@ -40,7 +40,9 @@ export function usePrivySide(): PrivySide {
   const signMsg = useCallback(async (message: Uint8Array) => {
     const { w, signMessage } = live.current;
     if (!w) throw new Error("Email wallet not ready");
-    return (await signMessage({ message, wallet: w })).signature;
+    // Message signing is free and only proves wallet ownership (gate codes, usernames), so skip Privy's
+    // confirm screen. Transactions, which move money, keep it.
+    return (await signMessage({ message, wallet: w, options: { uiOptions: { showWalletUIs: false } } })).signature;
   }, []);
 
   const address = w?.address;
