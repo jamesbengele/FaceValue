@@ -6,6 +6,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { codeFromScan, verifyCodeAny } from "@/lib/gate";
 import { EXTRA_GATE_ORIGINS } from "@/lib/config";
+import { ding, thunk } from "@/lib/sounds";
 import { fanPda, makeProgram } from "@/lib/program";
 import { parseName } from "@/lib/eventMeta";
 import { useAppWallet } from "@/lib/privyWallet";
@@ -72,7 +73,7 @@ export default function CheckTicket() {
         organizer: pk, event: verdict.eventKey, ticket: verdict.ticketKey, fanPass: fanPda(pk, verdict.owner), systemProgram: SystemProgram.programId,
       }).instruction();
       await simulateThenSend(connection, wallet, [ix]);
-      setCheckedIn(true);
+      setCheckedIn(true); ding();
     } catch (x) { const u = toUiError(x); setErr(u.msg); }
     finally { setBusy(false); }
   }
@@ -91,6 +92,8 @@ export default function CheckTicket() {
         why: "Gate codes change every 10 seconds, so a screenshot or forwarded code stops working. Ask the holder to show the live code." });
   }, [left, verdict, checkedIn, busy]);
 
+  // Sound the verdict once per scan: ding for valid, thunk for rejected. Silent until the page has had a tap.
+  useEffect(() => { if (verdict.state === "ok") ding(); else if (verdict.state === "bad") thunk(); }, [verdict.state]);
   const good = verdict.state === "ok";
 
   return (

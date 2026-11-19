@@ -15,6 +15,7 @@ import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
 import Landing from "./Landing";
 import Footer, { LogoMark } from "./Footer";
+import { ding, thunk, soundOn, setSoundOn } from "@/lib/sounds";
 import { SavedAccount, useSavedAccounts } from "@/lib/savedAccounts";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
@@ -41,6 +42,8 @@ type MenuProps = {
 };
 function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onSwitch, onForget }: MenuProps) {
   const [open, setOpen] = useState(false);
+  const [sound, setSound] = useState(true);
+  useEffect(() => { if (open) setSound(soundOn()); }, [open]);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -64,6 +67,9 @@ function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onS
           </div>
           <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={() => { onFunds(); setOpen(false); }}>Get test funds</button>
+          <button role="menuitem" className={`${item} flex items-center justify-between`} onClick={() => { const on = !sound; setSoundOn(on); setSound(on); if (on) ding(); }}>
+            Sounds<span className="text-sm text-zinc-400">{sound ? "On" : "Off"}</span>
+          </button>
           <div className="my-1 border-t border-white/10" />
           <div className="px-3 pb-1 pt-2 text-sm text-zinc-400">Accounts on this device</div>
           {others.map((a) => (
@@ -427,11 +433,14 @@ export default function App() {
     setBusy(true); setErr(null); setToast(null); setErrFace(ev && usd(ev.account.facePrice));
     try {
       const sig = await simulateThenSend(connection, wallet, await build());
+      ding();
       setToast({ sig, text });
       await load();
       return true;
     } catch (e) {
-      setErr(toUiError(e));
+      const u = toUiError(e);
+      if (u.kind === "face") thunk(); // the price cap said no
+      setErr(u);
       return false;
     } finally { setBusy(false); }
   }

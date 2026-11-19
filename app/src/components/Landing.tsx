@@ -1,7 +1,8 @@
 "use client";
 // Signed-out home: a hook you can play with before signing in.
 // Nothing here touches the chain; the scalp demo and the gate code are illustrations of what the program enforces.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ding, thunk } from "@/lib/sounds";
 import { btn } from "./ui";
 import type { SavedAccount } from "@/lib/savedAccounts";
 import { BuyArt, CapArt, GateArt, HeroArt } from "./Illustrations";
@@ -13,7 +14,13 @@ function ScalpDemo() {
   const [price, setPrice] = useState(120);
   const [tries, setTries] = useState(0);
   const blocked = price > FACE;
-  useEffect(() => { if (blocked) setTries((t) => t + 1); }, [blocked]);
+  // Each time the price crosses face value: a thunk going over, a ding coming back under. Not on first render.
+  const first = useRef(true);
+  useEffect(() => {
+    if (blocked) setTries((t) => t + 1);
+    if (first.current) { first.current = false; return; }
+    if (blocked) thunk(); else ding();
+  }, [blocked]);
   const royalty = (price * 0.05).toFixed(2);
 
   return (
