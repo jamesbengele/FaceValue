@@ -17,10 +17,6 @@ export const fanPda = (organizer: PublicKey, fan: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("fan"), organizer.toBuffer(), fan.toBuffer()], programId)[0];
 export const perksPda = (event: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("perks"), event.toBuffer()], programId)[0];
-// Devnet still runs the build from before set_perks (see commit 630d5c8), whose buy_ticket takes
-// ["presale", event] in the perks slot. Remove this and its fallback in App.tsx run() after redeploying.
-export const presalePda = (event: PublicKey) =>
-  PublicKey.findProgramAddressSync([Buffer.from("presale"), event.toBuffer()], programId)[0];
 export const discountPda = (event: PublicKey, buyer: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from("discount"), event.toBuffer(), buyer.toBuffer()], programId)[0];
 
