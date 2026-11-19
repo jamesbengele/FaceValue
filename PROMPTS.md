@@ -1,5 +1,7 @@
 # PROMPTS.md
 
+Current state, newer than the early entries below (which describe the first builds): program `9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2`, gate codes rotate every 10 s, email sign-in only (no Phantom), 18 devnet test cases.
+
 Every prompt sent to a subagent, and what broke. Subagents run on Sonnet 5.5.
 
 ## 1. Program + tests (USDC, royalty)

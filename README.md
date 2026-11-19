@@ -1,6 +1,6 @@
 # FaceValue (UBC build)
 
-**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: _URL to be added before submission._ Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
+**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: _URL to be added before submission._ Demo video/GIF: _to be added._ Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
 
 The spec and pitch (SPEC.md, docs/PITCH.md, docs/DEMO.md) were carried over from an earlier practice build; all code in this repo was written during the hackathon. Spec: [SPEC.md](SPEC.md). Demo script: [docs/DEMO.md](docs/DEMO.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
