@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
-import { verifyCode } from "@/lib/gate";
+import { codeFromScan, verifyCodeAny } from "@/lib/gate";
+import { EXTRA_GATE_ORIGINS } from "@/lib/config";
 import { btn, btn2, card, h2, input } from "./ui";
 
 type Props = {
@@ -23,7 +24,7 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
     const fail = (t: string) => setResult({ ok: false, text: t });
     setResult(null);
     if (!pk) return fail("Connect the organizer wallet first");
-    const v = verifyCode(code, { now: Math.floor(Date.now() / 1000), origin: window.location.origin });
+    const v = verifyCodeAny(codeFromScan(code), { now: Math.floor(Date.now() / 1000), origins: [window.location.origin, ...EXTRA_GATE_ORIGINS] });
     if (!v.ok) return fail(v.reason);
     try {
       // Re-fetch from chain; never trust page state.

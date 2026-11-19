@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
 import QRCode from "qrcode";
-import { SESSION_SECS, WINDOW_SECS, makeCode, sessionMessage } from "@/lib/gate";
+import { SESSION_SECS, WINDOW_SECS, codeUrl, makeCode, sessionMessage } from "@/lib/gate";
+import { CHECK_BASE } from "@/lib/config";
 import type { AppWallet } from "@/lib/privyWallet";
 import { btn2, input } from "./ui";
 const nowSecs = () => Math.floor(Date.now() / 1000);
@@ -29,7 +30,7 @@ export default function GateCode({ ticket, wallet }: { ticket: string; wallet: A
   const code = live && wallet.publicKey
     ? makeCode({ ticket, wallet: wallet.publicKey.toBase58(), ephemeral: live.eph, expires: live.expires, walletSig: live.walletSig, now })
     : "";
-  useEffect(() => { if (code) QRCode.toDataURL(code, { margin: 1, width: 300, errorCorrectionLevel: "L" }).then(setQr).catch(() => setQr("")); }, [code, n]);
+  useEffect(() => { if (code) QRCode.toDataURL(codeUrl(CHECK_BASE || window.location.origin, code), { margin: 1, width: 300, errorCorrectionLevel: "L" }).then(setQr).catch(() => setQr("")); }, [code, n]);
 
   async function start() {
     setMsg("");

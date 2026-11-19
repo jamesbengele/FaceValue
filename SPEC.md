@@ -143,9 +143,9 @@ Buy ($50) → list at $80 blocked → list at $50 → buyer buys (seller gets $5
 
 ## 7. Rotating gate QR (no program change)
 1. Holder's page asks the wallet to `signMessage` **once**: `FaceValue gate session\nticket:<pda>\nkey:<ephemeral pubkey>\nexpires:<unix>\norigin:<page origin>`, valid 15 min.
-2. An ephemeral ed25519 key (tweetnacl, memory only) signs `ticket:<pda>.window:<floor(unix/30)>` every 30 s; the QR/text code is base64url JSON `{t, w, k, e, s, n, g}` (ticket, wallet, ephemeral key, expiry, wallet sig, window, ephemeral sig) and refreshes each window.
-3. The gate (organizer page) accepts a camera scan (BarcodeDetector if the browser has it) **or pasted text**. It verifies both signatures, `e` unexpired and at most 15 min ahead (plus 60 s for clock drift), `n` within ±1 window of now, the origin, then **re-fetches the ticket onchain**: `ticket.owner == w`, not used, not listed for resale, and the ticket's event is the one on the organizer's screen. Only then it sends `check_in`.
-Limit, stated plainly: a code is valid for under ~90 s and can be forwarded live to a stranger; it defeats screenshots, not a holder who cooperates in real time.
+2. An ephemeral ed25519 key (tweetnacl, memory only) signs `ticket:<pda>.window:<floor(unix/10)>` every 10 s; the QR/text code is base64url JSON `{t, w, k, e, s, n, g}` (ticket, wallet, ephemeral key, expiry, wallet sig, window, ephemeral sig) and refreshes each window.
+3. The gate (organizer page) accepts a camera scan (BarcodeDetector if the browser has it) **or pasted text**. It verifies both signatures, `e` unexpired and at most 15 min ahead (plus two windows, 20 s, for clock drift), `n` within ±1 window of now, the origin, then **re-fetches the ticket onchain**: `ticket.owner == w`, not used, not listed for resale, and the ticket's event is the one on the organizer's screen. Only then it sends `check_in`.
+Limit, stated plainly: a code is valid for under 20 s and can be forwarded live to a stranger; it defeats screenshots, not a holder who cooperates in real time.
 The gate passes the verified wallet `w` to `check_in(expected_owner)`; if the ticket was resold in between, the program rejects it with `OwnerChanged` and the buyer keeps an unused ticket. A listed ticket can therefore be checked in (this also clears the listing). Until the program upgrade in §11 is live, the gate refuses listed tickets instead, which narrows the race but does not close it.
 
 ## 8. Email sign-in (Privy)

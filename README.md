@@ -34,7 +34,7 @@ npm run dev                  # http://localhost:3000   (sidebar: Events, My tick
 `app/.env.local`: `DEMO_MINT` (used by `/api/drip`); `NEXT_PUBLIC_PRIVY_APP_ID` is required (email is the only sign-in; without it the app shows only a setup notice, see [app/README-email.md](app/README-email.md)); `NEXT_PUBLIC_RPC_URL` should be a private devnet RPC, because the public one rate-limits with three windows; `NEXT_PUBLIC_EVENT_ADDRESS` opens that event first (optional; all events are listed). Wallets need a little devnet SOL for ticket-account rent and fees.
 
 ## Limits to know
-- Gate codes last under ~90 s and defeat screenshots, not a holder forwarding a live code.
+- Gate codes rotate every 10 s and die within 20 s; they defeat screenshots, not a holder forwarding a live code.
 - Email wallets are funded by a devnet-only server route that mints test USDC; a real launch needs fee sponsorship, a real on-ramp and an authenticated, rate-limited route.
 - Off-chain side deals (cash on Venmo) can't be stopped by code.
 - A seller and a buyer can still agree on a higher price in private, also onchain: one transaction that lists at face, buys, and sends extra money on the side, signed by both. The program stops public listings above face, not private deals.
