@@ -1,24 +1,20 @@
-// DEVNET DEMO. Usernames live in a JSON file on this server, so this works on one machine, not on a serverless host.
+// DEVNET DEMO. Storage is in usernameStore: Redis when configured (needed on Vercel), else a JSON file.
 // A name is bound to a wallet by an ed25519 signature over `FaceValue username: <name>`.
 import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
-import * as fs from "fs";
-import * as path from "path";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
+import { usernameStore } from "@/lib/usernameStore";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const FILE = process.env.USERNAMES_FILE || path.resolve(process.cwd(), ".data/usernames.json");
-const read = (): Record<string, string> => { try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { return {}; } };
-const write = (m: Record<string, string>) => { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(m, null, 2)); };
 const ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export async function GET(req: Request) {
   const list = (new URL(req.url).searchParams.get("addresses") ?? "").split(",").filter((a) => ADDR.test(a)).slice(0, 200);
-  const all = read();
-  return NextResponse.json(Object.fromEntries(list.filter((a) => all[a]).map((a) => [a, all[a]])));
+  try { return NextResponse.json(await usernameStore.get(list)); }
+  catch { return NextResponse.json({ error: "Username store unavailable" }, { status: 503 }); }
 }
 
 export async function POST(req: Request) {
@@ -32,8 +28,8 @@ export async function POST(req: Request) {
   if (bad) return NextResponse.json({ error: bad }, { status: 400 });
   if (!nacl.sign.detached.verify(new TextEncoder().encode(usernameMessage(name)), sig, address.toBytes()))
     return NextResponse.json({ error: "Signature does not match this wallet" }, { status: 403 });
-  const all = read(), me = address.toBase58();
-  if (Object.entries(all).some(([a, n]) => n === name && a !== me)) return NextResponse.json({ error: "That username is taken" }, { status: 409 });
-  all[me] = name; write(all);
+  try {
+    if (!(await usernameStore.set(address.toBase58(), name))) return NextResponse.json({ error: "That username is taken" }, { status: 409 });
+  } catch { return NextResponse.json({ error: "Could not save the username, try again" }, { status: 503 }); }
   return NextResponse.json({ ok: true, username: name });
 }
