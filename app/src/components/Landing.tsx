@@ -1,8 +1,12 @@
 "use client";
 // Signed-out home: a hook you can play with before signing in.
 // Nothing here touches the chain; the scalp demo and the gate code are illustrations of what the program enforces.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ding, thunk } from "@/lib/sounds";
 import { btn } from "./ui";
+import type { SavedAccount } from "@/lib/savedAccounts";
+import { BuyArt, CapArt, GateArt, HeroArt } from "./Illustrations";
+import HoloTicket from "./HoloTicket";
 
 const FACE = 50;
 
@@ -10,12 +14,18 @@ function ScalpDemo() {
   const [price, setPrice] = useState(120);
   const [tries, setTries] = useState(0);
   const blocked = price > FACE;
-  useEffect(() => { if (blocked) setTries((t) => t + 1); }, [blocked]);
+  // Each time the price crosses face value: a thunk going over, a ding coming back under. Not on first render.
+  const first = useRef(true);
+  useEffect(() => {
+    if (blocked) setTries((t) => t + 1);
+    if (first.current) { first.current = false; return; }
+    if (blocked) thunk(); else ding();
+  }, [blocked]);
   const royalty = (price * 0.05).toFixed(2);
 
   return (
-    <div className="landing-card relative overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-8">
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">Try it: scalp this ticket</p>
+    <div className="boxed relative overflow-hidden p-5 sm:p-8">
+      <p className="font-mono text-sm text-zinc-400">/ try it: scalp this ticket</p>
 
       <div key={blocked ? `no-${tries}` : "ok"} className={`ticket mt-5 rounded-2xl p-4 sm:p-5 ${blocked ? "ticket-shake" : ""}`}>
         <div className="flex items-start justify-between gap-4">
@@ -75,7 +85,7 @@ function GateCodeDemo() {
   const ring = 2 * Math.PI * 22;
 
   return (
-    <div className="landing-card flex items-center gap-5 rounded-3xl border border-white/10 p-5 sm:p-6">
+    <div className="boxed flex items-center gap-5 p-5 sm:p-6">
       <div key={win} className="qr-pop grid shrink-0 grid-cols-9 gap-[2px] rounded-xl bg-white p-2" aria-hidden>
         {cells.map((on, i) => <span key={i} className={`h-[9px] w-[9px] rounded-[1px] ${on ? "bg-black" : "bg-transparent"}`} />)}
       </div>
@@ -95,40 +105,60 @@ function GateCodeDemo() {
   );
 }
 
-const STEPS: [string, string][] = [
-  ["Buy at face value", "Sign in with just your email. No crypto wallet, no app to install."],
-  ["Resell, but never above face", "Can't go? List it. The cap is built into the ticket, and the organizer earns a royalty."],
-  ["Walk in with a live code", "A rotating code proves it's really you. Screenshots and scams don't scan."],
+const STEPS: { title: string; tag: string; text: string; Art: () => JSX.Element; panel: string }[] = [
+  { title: "Buy at face value", tag: "sign in with just your email", text: "No crypto wallet, no app to install. You get test money on sign-up and buy in two taps.", Art: BuyArt, panel: "panel-pink" },
+  { title: "Resell, never above face", tag: "the cap lives inside the ticket", text: "Can't go? List it. Nobody can price it above what you paid, and the organizer earns a royalty on every resale.", Art: CapArt, panel: "panel-lilac" },
+  { title: "Walk in with a live code", tag: "a new code every 10 seconds", text: "A rotating code proves it's really you. Screenshots die in 20 seconds, and any phone camera checks it at the door.", Art: GateArt, panel: "panel-mint" },
 ];
 
-export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn: () => void }) {
+type Props = { ready: boolean; onSignIn: (email?: string) => void; accounts: SavedAccount[]; onForget: (address: string) => void };
+
+export default function Landing({ ready, onSignIn, accounts, onForget }: Props) {
   return (
-    <div className="landing pb-10">
-      <section className="relative pt-10 sm:pt-16">
-        <div className="hero-glow" aria-hidden />
-        <div className="float-ticket ft-1" aria-hidden>$50</div>
-        <div className="float-ticket ft-2" aria-hidden>$50</div>
-        <div className="float-ticket ft-3" aria-hidden>$50</div>
-        <p className="fade-up inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-sm text-zinc-400">
-          <span className="live-dot" aria-hidden /> Live on Solana devnet · built at UBC
-        </p>
-        <h2 className="fade-up font-display mt-6 text-[clamp(3rem,11vw,7.5rem)] leading-[0.92] tracking-tight" style={{ animationDelay: "60ms" }}>
-          Face value.<br /><span className="hero-accent">Every time.</span>
-        </h2>
-        <p className="fade-up mt-6 max-w-xl text-xl text-zinc-400" style={{ animationDelay: "120ms" }}>
-          Student tickets that physically can&apos;t be scalped. The resale cap lives inside the ticket, so a $50 seat stays a $50 seat.
-        </p>
-        <div className="fade-up mt-8 flex flex-wrap items-center gap-4" style={{ animationDelay: "180ms" }}>
-          <button className={`${btn} !px-7 !py-4 !text-lg`} disabled={!ready} onClick={onSignIn}>Get tickets: sign in with email</button>
-          <span className="text-base text-zinc-500">Free test money on sign-up. Takes 20 seconds.</span>
+    <div className="landing pb-6">
+      <section className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-stretch">
+        <div className="boxed flex flex-col justify-center p-6 sm:p-10">
+          <p className="fade-up flex items-center gap-2 font-mono text-sm text-zinc-400"><span className="live-dot" aria-hidden /> / live on solana devnet · built at UBC</p>
+          <h2 className="fade-up font-display mt-5 text-[clamp(2.8rem,8vw,5.6rem)] leading-[0.95] tracking-tight" style={{ animationDelay: "60ms" }}>
+            Face value.<br /><span className="hero-accent">Every time.</span>
+          </h2>
+          <p className="fade-up mt-4 text-lg text-zinc-400" style={{ animationDelay: "100ms" }}>- student tickets that can&apos;t be scalped -</p>
+          <p className="fade-up mt-4 max-w-lg text-lg" style={{ animationDelay: "120ms" }}>
+            The resale cap lives inside the ticket itself, so a $50 seat stays a $50 seat. No bots, no markups, no fakes at the door.
+          </p>
+          {accounts.length > 0 && (
+            <div className="fade-up mt-7" style={{ animationDelay: "150ms" }}>
+              <p className="font-mono text-sm text-zinc-400">/ welcome back</p>
+              <ul className="mt-2 space-y-2">
+                {accounts.slice(0, 4).map((a) => (
+                  <li key={a.address} className="boxed flex items-center gap-2 p-1.5 pl-4">
+                    <button className="min-w-0 flex-1 py-1.5 text-left disabled:opacity-40" disabled={!ready} onClick={() => onSignIn(a.email)}>
+                      <span className="block truncate text-lg font-semibold">{a.username ? `@${a.username}` : a.email}</span>
+                      <span className="block truncate text-sm text-zinc-400">{a.username ? a.email : `${a.address.slice(0, 4)}…${a.address.slice(-4)}`}</span>
+                    </button>
+                    <button className={`${btn} !px-4 !py-2`} disabled={!ready} onClick={() => onSignIn(a.email)}>Continue</button>
+                    <button className="px-3 text-xl text-zinc-400 hover:opacity-70" aria-label={`Forget ${a.email} on this device`} title="Forget on this device" onClick={() => onForget(a.address)}>×</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="fade-up mt-8 flex flex-wrap items-center gap-4" style={{ animationDelay: "180ms" }}>
+            <button className={`${btn} !px-7 !py-4 !text-lg`} disabled={!ready} onClick={() => onSignIn()}>Get tickets: sign in with email</button>
+            <span className="text-base text-zinc-500">Free test money. Takes 20 seconds.</span>
+          </div>
+        </div>
+        <div className="boxed panel-lilac relative flex items-center justify-center overflow-hidden p-4 sm:p-8">
+          <HeroArt className="pointer-events-none absolute inset-0 h-full w-full opacity-40" />
+          <HoloTicket />
         </div>
       </section>
 
-      <section className="mt-14 grid gap-5 lg:grid-cols-[1.15fr_1fr] lg:items-start">
+      <section className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
         <ScalpDemo />
-        <div className="space-y-5 fade-up" style={{ animationDelay: "260ms" }}>
+        <div className="space-y-6">
           <GateCodeDemo />
-          <div className="landing-card grid grid-cols-3 divide-x divide-white/10 rounded-3xl border border-white/10 py-5 text-center">
+          <div className="boxed grid grid-cols-3 divide-x divide-[var(--ink-line)] py-5 text-center">
             {[["$0", "markup, ever"], ["10 s", "gate code life"], ["5%", "royalty to hosts"]].map(([n, l]) => (
               <div key={l} className="px-2"><p className="font-display text-3xl sm:text-4xl">{n}</p><p className="text-sm text-zinc-400">{l}</p></div>
             ))}
@@ -136,23 +166,30 @@ export default function Landing({ ready, onSignIn }: { ready: boolean; onSignIn:
         </div>
       </section>
 
-      <section className="mt-16">
-        <h3 className="font-display text-4xl sm:text-5xl">How it works</h3>
-        <ol className="mt-6 grid gap-5 md:grid-cols-3">
-          {STEPS.map(([t, d], i) => (
-            <li key={t} className="landing-card fade-up rounded-3xl border border-white/10 p-6" style={{ animationDelay: `${320 + i * 90}ms` }}>
-              <span className="font-display text-5xl text-zinc-500">0{i + 1}</span>
-              <p className="mt-3 text-xl font-semibold">{t}</p>
-              <p className="mt-2 text-base text-zinc-400">{d}</p>
+      <section id="how" className="mt-16 scroll-mt-6">
+        <p className="font-mono text-sm text-zinc-400">/ how it works</p>
+        <h3 className="font-display mt-2 text-4xl sm:text-5xl">Three steps, zero scalpers.</h3>
+        <ol className="mt-8 space-y-8">
+          {STEPS.map(({ title, tag, text, Art, panel }, i) => (
+            <li key={title} className="boxed grid overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className={`${panel} aspect-[4/3] border-b-[1.5px] border-[var(--ink-line)] p-6 md:aspect-auto md:min-h-[260px] md:border-b-0 md:border-r-[1.5px]`}><Art /></div>
+              <div className="flex flex-col p-6 sm:p-10">
+                <p className="font-mono text-sm text-zinc-400">/ 0{i + 1}</p>
+                <p className="mt-3 text-2xl font-bold sm:text-3xl">{title}</p>
+                <p className="mt-1 text-base text-zinc-400">- {tag} -</p>
+                <p className="mt-6 text-lg md:mt-auto md:pt-10">{text}</p>
+              </div>
             </li>
           ))}
         </ol>
       </section>
 
-      <section className="landing-card mt-16 rounded-3xl border border-white/10 px-6 py-12 text-center sm:py-16">
-        <h3 className="font-display text-4xl sm:text-6xl">Your seat. Your price.</h3>
-        <p className="mx-auto mt-3 max-w-md text-lg text-zinc-400">No bots, no $400 resale for a $50 ticket.</p>
-        <button className={`${btn} mt-8 !px-7 !py-4 !text-lg`} disabled={!ready} onClick={onSignIn}>Sign in with email</button>
+      <section className="boxed panel-yellow mt-16 grid items-center gap-6 overflow-hidden p-8 sm:p-12 md:grid-cols-[1fr_auto]">
+        <div>
+          <p className="font-mono text-sm art-ink-soft">/ your seat, your price</p>
+          <h3 className="font-display art-ink mt-2 text-4xl sm:text-6xl">No $400 resale for a $50 ticket.</h3>
+        </div>
+        <button className="art-cta px-7 py-4 text-lg font-bold disabled:opacity-40" disabled={!ready} onClick={() => onSignIn()}>Sign in with email →</button>
       </section>
     </div>
   );

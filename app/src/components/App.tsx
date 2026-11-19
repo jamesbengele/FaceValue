@@ -14,6 +14,9 @@ import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
 import Landing from "./Landing";
+import Footer, { LogoMark } from "./Footer";
+import { ding, thunk, soundOn, setSoundOn } from "@/lib/sounds";
+import { SavedAccount, useSavedAccounts } from "@/lib/savedAccounts";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
 import { baseToDollarString, dollarsToBase, short, usd } from "@/lib/money";
@@ -33,8 +36,14 @@ function ThemeToggle() {
 type Bal = { sol: number; usd: string | null } | "error" | null;
 const balText = (bal: Bal) => (bal === "error" ? "Balance unavailable" : bal ? `${bal.usd ? `${bal.usd} · ` : ""}${bal.sol.toFixed(3)} SOL` : "…");
 
-function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal; onFunds: () => void; onSignOut: () => void }) {
+type MenuProps = {
+  pk: PublicKey; bal: Bal; email: string | null; username?: string; others: SavedAccount[];
+  onFunds: () => void; onSignOut: () => void; onSwitch: (email?: string) => void; onForget: (address: string) => void;
+};
+function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onSwitch, onForget }: MenuProps) {
   const [open, setOpen] = useState(false);
+  const [sound, setSound] = useState(true);
+  useEffect(() => { if (open) setSound(soundOn()); }, [open]);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -45,18 +54,35 @@ function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal;
   const item = "block w-full rounded-lg px-3 py-2.5 text-left text-base hover:bg-white/[0.06]";
   return (
     <div ref={ref} className="relative">
-      <button className={`${btn2} flex items-center gap-2 whitespace-nowrap !px-3 font-mono !text-sm`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
-        {short(pk)}<Icon name="chevron" className="h-4 w-4" />
+      <button className={`${btn2} flex items-center justify-center !px-2.5`} aria-label="Settings and accounts" title="Settings" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
+        <Icon name="settings" className={`h-6 w-6 transition-transform duration-300 ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
         <div role="menu" className="surface absolute right-0 z-30 mt-2 w-72 rounded-xl border border-white/10 p-2 shadow-xl">
           <div className="space-y-1 px-3 py-2">
-            <div className="text-sm text-zinc-400">Email wallet</div>
-            <div className="break-all font-mono text-sm">{pk.toBase58()}</div>
+            <div className="text-sm text-zinc-400">Signed in{username ? <> as <b className="text-inherit">@{username}</b></> : ""}</div>
+            {email && <div className="truncate text-base">{email}</div>}
+            <div className="break-all font-mono text-sm text-zinc-400">{pk.toBase58()}</div>
             <div className="pt-1 text-base tabular-nums">{balText(bal)}</div>
           </div>
           <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={() => { onFunds(); setOpen(false); }}>Get test funds</button>
+          <button role="menuitem" className={`${item} flex items-center justify-between`} onClick={() => { const on = !sound; setSoundOn(on); setSound(on); if (on) ding(); }}>
+            Sounds<span className="text-sm text-zinc-400">{sound ? "On" : "Off"}</span>
+          </button>
+          <div className="my-1 border-t border-white/10" />
+          <div className="px-3 pb-1 pt-2 text-sm text-zinc-400">Accounts on this device</div>
+          {others.map((a) => (
+            <div key={a.address} className="flex items-center gap-1">
+              <button role="menuitem" className={`${item} min-w-0 flex-1`} onClick={() => { setOpen(false); onSwitch(a.email); }} title={`Switch to ${a.email}`}>
+                <span className="block truncate">{a.username ? `@${a.username}` : a.email}</span>
+                {a.username && <span className="block truncate text-sm text-zinc-400">{a.email}</span>}
+              </button>
+              <button className="rounded-lg px-3 py-2 text-zinc-400 hover:bg-white/[0.06]" aria-label={`Forget ${a.email} on this device`} title="Forget on this device" onClick={() => onForget(a.address)}>×</button>
+            </div>
+          ))}
+          <button role="menuitem" className={item} onClick={() => { setOpen(false); onSwitch(); }}>+ Add another account</button>
+          <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={onSignOut}>Sign out</button>
         </div>
       )}
@@ -67,6 +93,79 @@ function AccountMenu({ pk, bal, onFunds, onSignOut }: { pk: PublicKey; bal: Bal;
 function Status({ t }: { t: TicketAcc }) {
   const [label, dot] = t.used ? ["Used", "bg-zinc-500"] : t.listed ? ["Listed", "bg-amber-400"] : ["Owned", "bg-emerald-400"];
   return <span className="inline-flex items-center gap-2 text-base text-zinc-400"><span className={`h-2 w-2 rounded-full ${dot}`} />{label}</span>;
+}
+
+// Host's view of one event: progress, three headline numbers, then who holds each ticket.
+const wholeDollars = (s: string) => s.replace(/\.00$/, "");
+// A steady color per username, so the same person always gets the same avatar.
+const avatarStyle = (name: string) => {
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return name ? { background: `hsl(${h} 70% 55% / 0.2)`, color: `hsl(${h} 65% 50%)` } : { background: "rgba(127,127,127,0.18)", color: "rgb(127,127,127)" };
+};
+function SalesPanel({ ev, tickets, busy, whoIs, onCheckIn }: {
+  ev: Row<EventAcc>; tickets: Row<TicketAcc>[]; busy: boolean;
+  whoIs: (a: PublicKey) => string | undefined; onCheckIn: (t: Row<TicketAcc>) => void;
+}) {
+  const n = ev.account.sold, max = ev.account.maxSupply;
+  const pct = max ? Math.round((n / max) * 100) : 0;
+  const checkedIn = tickets.filter((t) => t.account.used).length;
+  const onResale = tickets.filter((t) => t.account.listed && !t.account.used).length;
+  // Who still needs to come in first, then resale listings, then people already inside.
+  const rank = (t: Row<TicketAcc>) => (t.account.used ? 2 : t.account.listed ? 1 : 0);
+  const sorted = [...tickets].sort((a, b) => rank(a) - rank(b) || a.account.ticketId - b.account.ticketId);
+  const stats: [string, string][] = [[wholeDollars(usd(ev.account.facePrice.muln(n))), "Revenue"], [`${checkedIn}`, "Checked in"], [`${onResale}`, "On resale"]];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-display text-4xl tabular-nums">{n}<span className="text-2xl text-zinc-400"> / {max} sold</span></p>
+          <p className="text-base text-zinc-400 tabular-nums">{pct}%</p>
+        </div>
+        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Tickets sold">
+          <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: "var(--accent)" }} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/10 py-3 text-center">
+        {stats.map(([v, l]) => (
+          <div key={l} className="min-w-0 px-2">
+            <p className="truncate font-display text-2xl tabular-nums sm:text-3xl">{v}</p>
+            <p className="whitespace-nowrap text-sm text-zinc-400">{l}</p>
+          </div>
+        ))}
+      </div>
+      {sorted.length === 0 ? <p className="text-zinc-400">No tickets sold yet. Share the buyer link to get started.</p> : (
+        <ul className={rows}>
+          {sorted.map((t) => {
+            const name = whoIs(t.account.owner);
+            const waiting = !t.account.used && !t.account.listed;
+            return (
+              <li key={t.publicKey.toBase58()} className="flex items-center gap-3 py-3">
+                <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-bold uppercase" style={avatarStyle(name ?? "")}>{name ? name[0] : "?"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{name ? `@${name}` : "Guest"}</p>
+                  <p className="text-sm text-zinc-400">Ticket #{t.account.ticketId}</p>
+                </div>
+                {waiting
+                  ? <button className={`${btn2} !py-2`} disabled={busy} onClick={() => onCheckIn(t)}>Check in</button>
+                  : t.account.used
+                    ? <span className="whitespace-nowrap rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-400">✓ Checked in</span>
+                    : <span className="whitespace-nowrap rounded-full bg-amber-400/10 px-3 py-1 text-sm text-amber-300">For resale</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CopyLink({ path }: { path: string }) {
+  const [done, setDone] = useState(false);
+  const copy = () => {
+    try { void navigator.clipboard.writeText(location.origin + path); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
+  };
+  return <button className={`${btn2} !py-2`} onClick={copy}>{done ? "Link copied ✓" : "Copy buyer link"}</button>;
 }
 
 function ErrorBox({ e, face, title, onClose }: { e: UiError; face?: string; title?: string; onClose?: () => void }) {
@@ -161,6 +260,12 @@ export default function App() {
   const [infos, setInfos] = useState<Row<EventInfoAcc>[]>([]);
   // Usernames (off-chain, SPEC §5): address -> name, for event organizers and the signed-in wallet.
   const [names, setNames] = useState<Record<string, string>>({});
+  // Remember each account signed in on this device (email, wallet, username) for one-tap switching.
+  const saved = useSavedAccounts();
+  const myEmail = wallet.emailAuth?.email ?? null;
+  const myName = pk ? names[pk.toBase58()] : undefined;
+  const { remember } = saved;
+  useEffect(() => { if (pk && myEmail) remember({ email: myEmail, address: pk.toBase58(), username: myName }); }, [pk, myEmail, myName, remember]);
   const [namesLoaded, setNamesLoaded] = useState(false);
   const [namesTried, setNamesTried] = useState(false); // first lookup finished (ok or not); if it fails the app is not blocked
   const [nameInput, setNameInput] = useState("");
@@ -328,11 +433,14 @@ export default function App() {
     setBusy(true); setErr(null); setToast(null); setErrFace(ev && usd(ev.account.facePrice));
     try {
       const sig = await simulateThenSend(connection, wallet, await build());
+      ding();
       setToast({ sig, text });
       await load();
       return true;
     } catch (e) {
-      setErr(toUiError(e));
+      const u = toUiError(e);
+      if (u.kind === "face") thunk(); // the price cap said no
+      setErr(u);
       return false;
     } finally { setBusy(false); }
   }
@@ -571,7 +679,7 @@ export default function App() {
     <>
       <section className={`${card} space-y-5`}>
         <h2 className={h2}>My tickets</h2>
-        {pk && <p className="break-all text-base text-zinc-400">Your wallet address{SHOW_GIFTING ? " (give it to friends so they can send you tickets)" : ""}: <code>{pk.toBase58()}</code></p>}
+        {pk && SHOW_GIFTING && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
         {mine.length === 0 && <p className="text-zinc-400">No tickets yet.</p>}
         <div className="space-y-6 [&>*+*]:border-t [&>*+*]:border-white/10 [&>*+*]:pt-6">
           {allEvents.filter((ev) => mine.some((t) => t.account.event.equals(ev.publicKey))).sort((a, b) => Number(isPast(a)) - Number(isPast(b)) || (parseName(a.account.name).startMs ?? Infinity) - (parseName(b.account.name).startMs ?? Infinity)).map((ev) => {
@@ -712,6 +820,16 @@ export default function App() {
     </>
   );
 
+  // Usernames of the selected event's ticket holders, so the host sees names, not wallet codes.
+  // Wallets without one are stored as "" so they aren't fetched again on every refresh.
+  const holdersKey = hostEv ? [...new Set(ticketsOf(hostEv).map((t) => t.account.owner.toBase58()))].sort().join(",") : "";
+  useEffect(() => {
+    const want = holdersKey.split(",").filter((a) => a && !(a in names));
+    if (!want.length) return;
+    fetch(`/api/username?addresses=${want.join(",")}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+      .then((j: Record<string, string>) => setNames((n) => ({ ...n, ...Object.fromEntries(want.map((a) => [a, j[a] ?? ""])) })));
+  }, [holdersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Events the signed-in wallet organizes: sales, buyer link, delete, tickets, check-in and the gate.
   const myEventsView = (
     <>
@@ -722,7 +840,7 @@ export default function App() {
             {myEvents.map((ev) => <EventRow key={ev.publicKey.toBase58()} ev={ev} perks={perksOf(ev)} active={ev === hostEv} onClick={() => setHostSel(ev.publicKey.toBase58())} />)}
           </div>
         )}
-        {hostEv && <p className="break-all text-sm text-zinc-500">Buyer link: <code>?event={hostEv.publicKey.toBase58()}</code></p>}
+        {hostEv && <CopyLink path={`/?event=${hostEv.publicKey.toBase58()}`} />}
         {hostEv && (hostEv.account.sold === 0
           ? <button className={btn2} disabled={busy} onClick={() => deleteEvent(hostEv)}>Delete event</button>
           : <p className="text-base text-zinc-400">Tickets are sold, so this event can&apos;t be deleted.</p>)}
@@ -730,31 +848,7 @@ export default function App() {
       {hostEv && (
         <section className={`${card} space-y-3`}>
           <h2 className={h2}>Tickets for {parseName(hostEv.account.name).name}</h2>
-          {(() => {
-            const ts = ticketsOf(hostEv), n = hostEv.account.sold;
-            const stat = (label: string, v: string | number) => <div className="rounded-lg border border-white/10 p-3"><div className="text-2xl font-bold tabular-nums">{v}</div><div className="text-base text-zinc-400">{label}</div></div>;
-            return (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {stat("Sold", `${n} / ${hostEv.account.maxSupply}`)}
-                {stat("Ticket sales", usd(hostEv.account.facePrice.muln(n)))}
-                {stat("Checked in", ts.filter((t) => t.account.used).length)}
-                {stat("Listed for resale", ts.filter((t) => t.account.listed).length)}
-              </div>
-            );
-          })()}
-          {ticketsOf(hostEv).length === 0 ? <p className="text-zinc-400">None sold yet.</p> : (
-            <div className={rows}>
-              {ticketsOf(hostEv).map((t) => (
-                <div key={t.publicKey.toBase58()} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
-                  <span className="tabular-nums"><span className="text-zinc-400">#{t.account.ticketId}</span> <span className="font-mono text-sm">{short(t.account.owner)}</span></span>
-                  <div className="flex items-center gap-4">
-                    <Status t={t.account} />
-                    {!t.account.used && <button className={btn2} disabled={busy} onClick={() => checkIn(t, hostEv)}>Check in</button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <SalesPanel ev={hostEv} tickets={ticketsOf(hostEv)} busy={busy} whoIs={whoIs} onCheckIn={(t) => checkIn(t, hostEv)} />
         </section>
       )}
       <Gate program={program} pk={pk} eventKey={hostEv?.publicKey} busy={busy} checkIn={(t) => run("Checked in", async () => [await checkInIx(t.event, t.ticket, t.owner)])} />
@@ -763,17 +857,18 @@ export default function App() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-28 pt-4 sm:px-6 md:pb-12 md:pt-6">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl">FaceValue</h1>
+      <header className="boxed flex items-center justify-between gap-3 py-2 pl-3 pr-2 sm:pl-4">
+        <a href="/" className="flex items-center gap-2.5" aria-label="FaceValue home"><LogoMark className="h-7 w-auto" /><h1 className="font-display text-2xl">FaceValue</h1></a>
         <div className="flex items-center gap-2">
           {pk && bal !== null && bal !== "error" && bal.usd && <span className="hidden text-base text-zinc-400 tabular-nums sm:inline">{bal.usd}</span>}
           <ThemeToggle />
-          {pk && <AccountMenu pk={pk} bal={bal} onFunds={getFunds} onSignOut={() => wallet.emailAuth?.logout()} />}
+          {pk && <AccountMenu pk={pk} bal={bal} email={myEmail} username={myName} others={saved.accounts.filter((a) => a.address !== pk.toBase58())}
+            onFunds={getFunds} onSignOut={() => wallet.emailAuth?.logout()} onSwitch={(e) => wallet.emailAuth?.switchTo(e)} onForget={saved.forget} />}
         </div>
       </header>
 
       {!pk ? (
-        <Landing ready={!!wallet.emailAuth?.ready} onSignIn={() => wallet.emailAuth?.login()} />
+        <Landing ready={!!wallet.emailAuth?.ready} onSignIn={(e) => wallet.emailAuth?.login(e)} accounts={saved.accounts} onForget={saved.forget} />
       ) : !namesTried ? (
         <p className="mt-10 text-center text-zinc-400">Loading…</p>
       ) : namesLoaded && !names[pk.toBase58()] ? (
@@ -804,6 +899,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <Footer />
 
       {/* Short-lived notices: bottom right on desktop, above the tab bar on phones. */}
       <div className="pointer-events-none fixed inset-x-4 bottom-20 z-20 flex flex-col items-center gap-2 md:inset-x-auto md:bottom-6 md:right-6 md:items-end">

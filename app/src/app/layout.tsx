@@ -12,7 +12,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={display.variable}>
-      <head><script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}` }} /></head>
+      <head><script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("theme");if(!t)t="light";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}` }} /></head>
       <body className="min-h-screen antialiased"><Providers>{children}</Providers></body>
     </html>
   );

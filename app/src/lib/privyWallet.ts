@@ -12,11 +12,18 @@ export interface AppWallet {
   signMessage?: (msg: Uint8Array) => Promise<Uint8Array>;
 }
 
-export type EmailAuth = { ready: boolean; authenticated: boolean; login: () => void; logout: () => void };
+export type EmailAuth = {
+  ready: boolean; authenticated: boolean; email: string | null;
+  /** Opens Privy's email sign-in, with `email` filled in when given. */
+  login: (email?: string) => void;
+  logout: () => void;
+  /** Signs out, then opens sign-in for `email` (or a blank one to add an account). */
+  switchTo: (email?: string) => Promise<void>;
+};
 export type PrivySide = { wallet: AppWallet | null; auth: EmailAuth | null };
 
 export function usePrivySide(): PrivySide {
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const { signMessage } = useSignMessage();
   const { signTransaction } = useSignTransaction();
@@ -40,7 +47,9 @@ export function usePrivySide(): PrivySide {
   const signMsg = useCallback(async (message: Uint8Array) => {
     const { w, signMessage } = live.current;
     if (!w) throw new Error("Email wallet not ready");
-    return (await signMessage({ message, wallet: w })).signature;
+    // Message signing is free and only proves wallet ownership (gate codes, usernames), so skip Privy's
+    // confirm screen. Transactions, which move money, keep it.
+    return (await signMessage({ message, wallet: w, options: { uiOptions: { showWalletUIs: false } } })).signature;
   }, []);
 
   const address = w?.address;
@@ -49,10 +58,15 @@ export function usePrivySide(): PrivySide {
     () => (authenticated && publicKey ? { publicKey, signTransaction: signTx, signMessage: signMsg } : null),
     [authenticated, publicKey, signTx, signMsg]
   );
-  const auth = useMemo<EmailAuth>(
-    () => ({ ready, authenticated, login: () => login({ loginMethods: ["email"] }), logout: () => { logout(); } }),
-    [ready, authenticated, login, logout]
-  );
+  const email = user?.email?.address ?? null;
+  const auth = useMemo<EmailAuth>(() => {
+    const open = (e?: string) => login({ loginMethods: ["email"], ...(e ? { prefill: { type: "email" as const, value: e } } : {}) });
+    return {
+      ready, authenticated, email, login: open,
+      logout: () => { logout(); },
+      switchTo: async (e?: string) => { await logout(); open(e); },
+    };
+  }, [ready, authenticated, email, login, logout]);
   return { wallet, auth };
 }
 
