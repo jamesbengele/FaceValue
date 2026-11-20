@@ -4,7 +4,7 @@
 
 The spec was carried over from an earlier practice build; all code in this repo was written during the hackathon. Spec: [SPEC.md](SPEC.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
-Features: event details (venue, text, image), buying up to 4 tickets at once, sold-out and ended states, an organizer sales overview, USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), required usernames (off-chain, linked to the email account and wallet), gifting a ticket, resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; live on the deployed program).
+Features: event details (venue, text, image), buying up to 4 tickets at once, sold-out and ended states, an organizer sales overview, USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), required usernames (off-chain, linked to the email account and wallet), resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; live on the deployed program).
 
 ## Layout
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `app/` Next.js app (IDL: `app/src/idl/facevalue.json`).
