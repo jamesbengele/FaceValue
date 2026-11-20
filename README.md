@@ -1,10 +1,10 @@
 # FaceValue (UBC build)
 
-**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: _URL to be added before submission._ Demo video/GIF: _to be added._ Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
+**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: https://facevalue-blush.vercel.app/. Demo video/GIF: _to be added._ Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
 
 The spec was carried over from an earlier practice build; all code in this repo was written during the hackathon. Spec: [SPEC.md](SPEC.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
-Features: event details (venue, text, image), buying up to 4 tickets at once, sold-out and ended states, an organizer sales overview, USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; needs the program redeployed with `set_perks`).
+Features: event details (venue, text, image), buying up to 4 tickets at once, sold-out and ended states, an organizer sales overview, USDC-style SPL token payments, organizer royalty on resales, rotating gate code (no camera needed), email sign-in (Privy), required usernames (off-chain, linked to the email account and wallet), gifting a ticket, resale listings grouped by price (cheapest first), and fan loyalty: check-ins are counted onchain per organizer, and an organizer can reward fans with enough check-ins with a fans-only presale and a discount on one ticket at the next event (SPEC §4b; live on the deployed program).
 
 ## Layout
 `program/` Anchor program (`src/lib.rs`) and devnet tests · `app/` Next.js app (IDL: `app/src/idl/facevalue.json`).
@@ -31,17 +31,17 @@ Tests mint their own token and fund wallets by transfer; no airdrops.
 cd app && cp .env.example .env.local   # then fill it in
 npm install                  # .npmrc sets legacy-peer-deps (Privy peer deps)
 npm run setup-demo           # creates a test mint only; copy it into app/.env.local as DEMO_MINT
-npm run dev                  # http://localhost:3000   (sidebar: Events, My tickets, My events, Host; ?organizer=1 opens Host)
+npm run dev                  # http://localhost:3000   (header tabs: Events, My tickets, My events, Host; ?organizer=1 opens Host)
 ```
-`app/.env.local`: `DEMO_MINT` (used by `/api/drip`); `NEXT_PUBLIC_PRIVY_APP_ID` is required (email is the only sign-in; without it the app shows only a setup notice, see [app/README-email.md](app/README-email.md)); `NEXT_PUBLIC_RPC_URL` should be a private devnet RPC, because the public one rate-limits with three windows; `NEXT_PUBLIC_EVENT_ADDRESS` opens that event first (optional; all events are listed). Wallets need a little devnet SOL for ticket-account rent and fees.
+`app/.env.local`: `DEMO_MINT` (used by `/api/drip`); `NEXT_PUBLIC_PRIVY_APP_ID` is required (email is the only sign-in; without it the app shows only a setup notice, see [app/README-email.md](app/README-email.md)); `NEXT_PUBLIC_RPC_URL` should be a private devnet RPC, because the public one rate-limits with three windows; `NEXT_PUBLIC_EVENT_ADDRESS` opens that event first (optional; all events are listed). Wallets need a little devnet SOL for ticket-account rent and fees. Usernames: `/api/username` stores them in Redis when `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or the `UPSTASH_REDIS_REST_*` pair) are set, else in a local JSON file; set the server-only `PRIVY_APP_SECRET` so a name is also linked to the Privy account and follows the email if the wallet changes.
 
 ## Limits to know
 - Gate codes rotate every 10 s and die within 20 s; they defeat screenshots, not a holder forwarding a live code.
 - Email wallets are funded by a devnet-only server route that mints test USDC; a real launch needs fee sponsorship, a real on-ramp and an authenticated, rate-limited route.
 - Off-chain side deals (cash on Venmo) can't be stopped by code.
 - A seller and a buyer can still agree on a higher price in private, also onchain: one transaction that lists at face, buys, and sends extra money on the side, signed by both. The program stops public listings above face, not private deals.
-- A resale that lands between the gate's read and the check-in transaction leaves the buyer with a used ticket. The gate refuses listed tickets to narrow this; closing it needs a program change (SPEC §7).
+- A resale that lands between the gate's read and the check-in transaction is rejected by the program (`OwnerChanged`), so the buyer keeps an unused ticket (SPEC §7, §11).
 - New tickets are numbered by a counter, so buyers who click in the same second collide: one wins and the rest must retry. Fine for a demo, not for a real on-sale.
 
 ## Put it online
-Any Next.js host works (e.g. Vercel: import the repo, root directory `app`, add the `.env.example` values as environment variables). Then add the site's address to the Privy app's allowed origins, or sign-in will fail. `/api/drip` is devnet-only and unauthenticated, so keep it off any real-money deployment.
+Any Next.js host works (e.g. Vercel: import the repo, root directory `app`, add the `.env.example` values as environment variables, including `PRIVY_APP_SECRET`, and a Redis store for usernames: on Vercel they are lost without it). Then add the site's address to the Privy app's allowed origins, or sign-in will fail. `/api/drip` is devnet-only and unauthenticated, so keep it off any real-money deployment.
