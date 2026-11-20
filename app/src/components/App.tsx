@@ -405,11 +405,12 @@ export default function App() {
     const addrs = [...new Set([...organizersKey.split(",").filter(Boolean), ...(pk ? [pk.toBase58()] : [])])];
     if (!addrs.length) return;
     try {
-      const r = await fetch(`/api/username?addresses=${addrs.join(",")}`);
+      const token = await wallet.emailAuth?.getToken();
+      const r = await fetch(`/api/username?addresses=${addrs.join(",")}${pk ? `&me=${pk.toBase58()}` : ""}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
       if (r.ok) { const j = await r.json(); setNames((n) => ({ ...n, ...j })); setNamesLoaded(true); }
     } catch { /* names are optional: fall back to short addresses */ }
     setNamesTried(true);
-  }, [organizersKey, pk]);
+  }, [organizersKey, pk, wallet.emailAuth]);
   useEffect(() => { loadNames(); }, [loadNames]);
   const whoIs = (a: PublicKey) => names[a.toBase58()];
   const saveUsername = async () => {
@@ -420,7 +421,8 @@ export default function App() {
       if (!pk || !wallet.signMessage) throw new Error("This wallet can't sign messages");
       const name = normalizeUsername(nameInput);
       const signature = await wallet.signMessage(new TextEncoder().encode(usernameMessage(name)));
-      const r = await fetch("/api/username", { method: "POST", headers: { "Content-Type": "application/json" },
+      const token = await wallet.emailAuth?.getToken();
+      const r = await fetch("/api/username", { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ address: pk.toBase58(), username: name, signature: Buffer.from(signature).toString("base64") }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Could not save the username");

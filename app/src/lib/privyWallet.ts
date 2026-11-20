@@ -17,13 +17,15 @@ export type EmailAuth = {
   /** Opens Privy's email sign-in, with `email` filled in when given. */
   login: (email?: string) => void;
   logout: () => void;
+  /** Privy access token for the signed-in user (sent to /api/username to link the name to the account). */
+  getToken: () => Promise<string | null>;
   /** Signs out, then opens sign-in for `email` (or a blank one to add an account). */
   switchTo: (email?: string) => Promise<void>;
 };
 export type PrivySide = { wallet: AppWallet | null; auth: EmailAuth | null };
 
 export function usePrivySide(): PrivySide {
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, user, getAccessToken } = usePrivy();
   const { wallets } = useWallets();
   const { signMessage } = useSignMessage();
   const { signTransaction } = useSignTransaction();
@@ -64,9 +66,10 @@ export function usePrivySide(): PrivySide {
     return {
       ready, authenticated, email, login: open,
       logout: () => { logout(); },
+      getToken: () => getAccessToken().catch(() => null),
       switchTo: async (e?: string) => { await logout(); open(e); },
     };
-  }, [ready, authenticated, email, login, logout]);
+  }, [ready, authenticated, email, login, logout, getAccessToken]);
   return { wallet, auth };
 }
 
