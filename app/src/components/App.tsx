@@ -284,16 +284,7 @@ export default function App() {
   const [form, setForm] = useState({ name: "UBC Student Section", start: "", face: "50", royalty: "5", supply: "20", mint: "", early: "0", discount: "0", earlyMin: "1", venue: "", description: "", image: "" });
 
   const [query, setQuery] = useState("");
-  // Per-device hiding of old events; nothing onchain changes (SPEC §5).
   const [qty, setQty] = useState(1);
-  const [hidden, setHidden] = useState<string[]>([]);
-  const [showHidden, setShowHidden] = useState(false);
-  useEffect(() => { try { setHidden(JSON.parse(localStorage.getItem("hiddenEvents") || "[]")); } catch {} }, []);
-  const hide = (key: string, on: boolean) => setHidden((h) => {
-    const n = on ? [...h, key] : h.filter((k) => k !== key);
-    try { localStorage.setItem("hiddenEvents", JSON.stringify(n)); } catch {}
-    return n;
-  });
   const [fundMsg, setFundMsg] = useState("");
   const [bal, setBal] = useState<Bal>(null);
   // Success and test-funds notices fade on their own; errors stay until dismissed or the next action.
@@ -556,7 +547,7 @@ export default function App() {
     return ixs;
   });
 
-  const shown = allEvents.filter((e) => buyable(e) && matchesQuery(e.account.name, query) && (showHidden || !hidden.includes(e.publicKey.toBase58())));
+  const shown = allEvents.filter((e) => buyable(e) && matchesQuery(e.account.name, query));
   const eventsView = !selEv ? (
     <section className={`${card} space-y-4`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -568,17 +559,11 @@ export default function App() {
       ) : (
         <div className={rows}>
           {shown.map((ev) => {
-            const key = ev.publicKey.toBase58(), isHidden = hidden.includes(key);
-            return (
-              <div key={key} className={isHidden ? "opacity-60" : ""}>
-                <EventRow ev={ev} perks={perksOf(ev)} onClick={() => setSel(key)} />
-                <button className="mb-2 text-base text-zinc-400 underline" onClick={() => hide(key, isHidden)}>{isHidden ? "Unhide" : "Hide on this device"}</button>
-              </div>
-            );
+            const key = ev.publicKey.toBase58();
+            return <EventRow key={key} ev={ev} perks={perksOf(ev)} onClick={() => setSel(key)} />;
           })}
         </div>
       )}
-      {hidden.length > 0 && <button className="text-base text-zinc-400 underline" onClick={() => setShowHidden(!showHidden)}>{showHidden ? "Stop showing hidden events" : `Show hidden (${hidden.length})`}</button>}
     </section>
   ) : (
     <>
