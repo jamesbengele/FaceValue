@@ -2,7 +2,7 @@
 const REPO = "https://github.com/jamesbengele/UBC-Hackathon";
 
 const COLUMNS: { title: string; links: [string, string][] }[] = [
-  { title: "Product", links: [["How it works", "/#how"], ["Check a ticket", "/check"], ["Host an event", "/?organizer=1"]] },
+  { title: "Product", links: [["Check a ticket", "/check"], ["Host an event", "/?organizer=1"]] },
   { title: "Project", links: [["GitHub", REPO], ["Docs", `${REPO}#readme`], ["Built on Solana", "https://solana.com"]] },
 ];
 

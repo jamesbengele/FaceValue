@@ -3,7 +3,7 @@
 // a ticket you can spin 360°. Nothing here touches the chain; the demos illustrate what the program enforces.
 import { useEffect, useRef, useState } from "react";
 import { ding, thunk } from "@/lib/sounds";
-import { btn, btn2 } from "./ui";
+import { btn } from "./ui";
 import type { SavedAccount } from "@/lib/savedAccounts";
 import HoloTicket from "./HoloTicket";
 
@@ -108,12 +108,6 @@ const FEATURES: { shape: "circle" | "square" | "diamond"; title: string; text: s
   { shape: "square", title: "A gate code that can't be screenshotted", text: "Your code changes every 10 seconds, so a screenshot is dead in 20. Any phone camera checks it at the door.", Demo: GateCodeDemo, tint: true },
 ];
 
-const STEPS: [string, string][] = [
-  ["Sign in with your email", "No crypto wallet and no app to install. You get test money the moment you join."],
-  ["Buy at face value", "Up to four tickets at the price the host set. That price follows the ticket forever."],
-  ["Walk in", "Show the live code. Resold, used or copied tickets don't scan."],
-];
-
 type Props = { ready: boolean; onSignIn: (email?: string) => void; accounts: SavedAccount[]; onForget: (address: string) => void };
 
 export default function Landing({ ready, onSignIn, accounts, onForget }: Props) {
@@ -129,7 +123,6 @@ export default function Landing({ ready, onSignIn, accounts, onForget }: Props) 
         </p>
         <div className="fade-up mt-8 flex flex-wrap items-center gap-3" style={{ animationDelay: "180ms" }}>
           <button className={`${btn} !px-6 !py-3`} disabled={!ready} onClick={() => onSignIn()}>Get tickets, it&apos;s free</button>
-          <a href="#how" className={`${btn2} !px-6 !py-3`}>How it works</a>
         </div>
         {accounts.length > 0 && (
           <div className="fade-up mt-8 max-w-md" style={{ animationDelay: "220ms" }}>
@@ -176,20 +169,6 @@ export default function Landing({ ready, onSignIn, accounts, onForget }: Props) 
             <p className="mt-1 text-sm muted">{l}</p>
           </div>
         ))}
-      </section>
-
-      <section id="how" className="mt-24 scroll-mt-24">
-        <Glyph shape="diamond" />
-        <h3 className="font-display mt-4 text-3xl sm:text-4xl">How it works</h3>
-        <ol className="mt-10 grid gap-10 md:grid-cols-3">
-          {STEPS.map(([t, d], i) => (
-            <li key={t} className="border-t hairline pt-5">
-              <p className="text-sm muted tabular-nums">0{i + 1}</p>
-              <p className="mt-2 text-xl font-medium">{t}</p>
-              <p className="mt-2 muted">{d}</p>
-            </li>
-          ))}
-        </ol>
       </section>
 
       <section className="mt-24 flex flex-col items-start justify-between gap-6 rounded-[28px] p-8 sm:flex-row sm:items-end sm:p-14" style={{ background: "var(--tint)" }}>
