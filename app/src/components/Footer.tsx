@@ -1,9 +1,24 @@
 // Site footer: logo, link columns and a quiet copyright line, with an oversized faint wordmark underneath.
+// Signed in, the Product links switch tabs in place (no page reload); signed out they point at the landing.
 const REPO = "https://github.com/jamesbengele/UBC-Hackathon";
+export type FooterTab = "events" | "tickets" | "mine" | "host";
 
-const COLUMNS: { title: string; links: [string, string][] }[] = [
-  { title: "Product", links: [["Check a ticket", "/check"], ["Host an event", "/?organizer=1"]] },
-  { title: "Project", links: [["GitHub", REPO], ["Docs", `${REPO}#readme`], ["Built on Solana", "https://solana.com"]] },
+type Item = { label: string; href?: string; tab?: FooterTab; scrollTo?: string; external?: boolean };
+
+const PROJECT: Item[] = [
+  { label: "GitHub", href: REPO, external: true },
+  { label: "Docs", href: `${REPO}#readme`, external: true },
+  { label: "Built on Solana", href: "https://solana.com", external: true },
+];
+const PRODUCT_OUT: Item[] = [
+  { label: "Check a ticket", href: "/check" },
+  { label: "Host an event", href: "/?organizer=1" },
+];
+const PRODUCT_IN: Item[] = [
+  { label: "Events", tab: "events" },
+  { label: "My tickets", tab: "tickets" },
+  { label: "Host an event", tab: "host" },
+  { label: "Check a ticket", href: "/check" },
 ];
 
 // The mark: a ticket with side notches, a perforation and a "$". Cut-outs use the page background.
@@ -17,28 +32,36 @@ export function LogoMark({ className = "" }: { className?: string }) {
   );
 }
 
-export default function Footer() {
+const linkCls = "text-[0.95rem] underline-offset-4 transition hover:underline";
+
+export default function Footer({ onTab }: { onTab?: (tab: FooterTab) => void }) {
   const year = new Date().getFullYear();
+  const go = (it: Item) => {
+    if (it.tab && onTab) onTab(it.tab);
+    else if (it.scrollTo) document.getElementById(it.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const render = (it: Item) =>
+    it.href ? (
+      <a href={it.href} className={linkCls} {...(it.external ? { target: "_blank", rel: "noreferrer" } : {})}>{it.label}{it.external ? " ↗" : ""}</a>
+    ) : (
+      <button className={`${linkCls} !min-h-0 text-left`} onClick={() => go(it)}>{it.label}</button>
+    );
+  const columns: [string, Item[]][] = [["Product", onTab ? PRODUCT_IN : PRODUCT_OUT], ["Project", PROJECT]];
+
   return (
     <footer className="mt-28 border-t hairline pt-12 [container-type:inline-size]" aria-label="Site footer">
       <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-[minmax(0,1.6fr)_1fr_1fr]">
         <div className="col-span-full sm:col-span-1">
-          <a href="/" className="inline-flex items-center gap-2.5" aria-label="FaceValue home">
+          <button className="!min-h-0 inline-flex items-center gap-2.5" aria-label="FaceValue home"
+            onClick={() => { if (onTab) onTab("events"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
             <LogoMark className="h-6 w-auto" /><span className="font-display text-xl">FaceValue</span>
-          </a>
+          </button>
           <p className="mt-3 max-w-xs text-sm muted">Student tickets that can&apos;t be resold above face value. Built at UBC.</p>
         </div>
-        {COLUMNS.map((c) => (
-          <nav key={c.title} aria-label={c.title}>
-            <p className="mb-3 text-sm muted">{c.title}</p>
-            <ul className="space-y-2.5">
-              {c.links.map(([label, href]) => (
-                <li key={label}>
-                  <a href={href} className="text-[0.95rem] underline-offset-4 hover:underline"
-                    {...(href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}>{label}</a>
-                </li>
-              ))}
-            </ul>
+        {columns.map(([title, items]) => (
+          <nav key={title} aria-label={title}>
+            <p className="mb-3 text-sm muted">{title}</p>
+            <ul className="space-y-2.5">{items.map((it) => <li key={it.label}>{render(it)}</li>)}</ul>
           </nav>
         ))}
       </div>

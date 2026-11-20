@@ -1,11 +1,10 @@
 "use client";
 // Signed-out home. Clean layout (white canvas, grey panels, pill buttons) with one unique piece:
 // a ticket you can spin 360°. Nothing here touches the chain; the demos illustrate what the program enforces.
-import { useEffect, useRef, useState } from "react";
-import { ding, thunk } from "@/lib/sounds";
-import { btn } from "./ui";
+import { useEffect, useState } from "react";
+import { btn, btn2 } from "./ui";
 import type { SavedAccount } from "@/lib/savedAccounts";
-import HoloTicket from "./HoloTicket";
+import HoloTicket, { type TicketInfo } from "./HoloTicket";
 
 const FACE = 50;
 
@@ -13,13 +12,7 @@ function ScalpDemo() {
   const [price, setPrice] = useState(120);
   const [tries, setTries] = useState(0);
   const blocked = price > FACE;
-  // Each time the price crosses face value: a thunk going over, a ding coming back under. Not on first render.
-  const first = useRef(true);
-  useEffect(() => {
-    if (blocked) setTries((t) => t + 1);
-    if (first.current) { first.current = false; return; }
-    if (blocked) thunk(); else ding();
-  }, [blocked]);
+  useEffect(() => { if (blocked) setTries((t) => t + 1); }, [blocked]);
   const royalty = (price * 0.05).toFixed(2);
 
   return (
@@ -79,7 +72,7 @@ function GateCodeDemo() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-6 sm:p-10">
-      <div className="demo-ticket p-4">
+      <div className="demo-ticket qr-card p-4">
         <div key={win} className="qr-pop grid grid-cols-9 gap-[3px]" aria-hidden>
           {cells.map((on, i) => <span key={i} className="h-3 w-3 rounded-[2px]" style={{ background: on ? "#0d0d0f" : "transparent" }} />)}
         </div>
@@ -97,6 +90,77 @@ function GateCodeDemo() {
   );
 }
 
+const usd0 = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+// Host-side math: what royalties a capped resale market pays, and what fans keep versus a typical markup.
+// Every number comes from the sliders; the only assumption (a 2x markup elsewhere) is stated on screen.
+function RoyaltyCalculator() {
+  const [price, setPrice] = useState(50);
+  const [sold, setSold] = useState(500);
+  const [resold, setResold] = useState(30);
+  const [royalty, setRoyalty] = useState(5);
+  const resales = Math.round((sold * resold) / 100);
+  const hostEarns = resales * price * (royalty / 100);
+  const fansKeep = resales * price; // a 2x markup would have cost each resale buyer one extra face value
+  const sliders: [string, number, number, number, number, (v: number) => void, (v: number) => string][] = [
+    ["Ticket price", price, 10, 150, 5, setPrice, (v) => `$${v}`],
+    ["Tickets sold", sold, 50, 5000, 50, setSold, (v) => v.toLocaleString("en-US")],
+    ["Resold by fans", resold, 0, 60, 5, setResold, (v) => `${v}%`],
+    ["Your royalty", royalty, 0, 10, 1, setRoyalty, (v) => `${v}%`],
+  ];
+  return (
+    <div className="card grid gap-8 !rounded-[28px] p-6 sm:p-10 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12">
+      <div className="space-y-6">
+        {sliders.map(([label, v, min, max, step, set, fmt]) => (
+          <label key={label} className="block">
+            <span className="flex items-baseline justify-between text-[0.95rem]"><span className="muted">{label}</span><span className="font-medium tabular-nums">{fmt(v)}</span></span>
+            <input type="range" min={min} max={max} step={step} value={v} onChange={(e) => set(Number(e.target.value))} className="scalp-range mt-3 w-full" />
+          </label>
+        ))}
+        <p className="text-sm muted">Royalty is set per event and capped at 10% by the program.</p>
+      </div>
+      <div className="flex flex-col justify-center gap-6">
+        <div>
+          <p className="text-sm muted">Royalties you earn from resales</p>
+          <p className="font-display text-[clamp(2.75rem,6vw,4.25rem)] leading-none tabular-nums">{usd0(hostEarns)}</p>
+          <p className="mt-1 text-sm muted">{resales.toLocaleString("en-US")} resales at {usd0(price)}, {royalty}% each</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 border-t hairline pt-6">
+          <div><p className="font-display text-3xl tabular-nums">{usd0(fansKeep)}</p><p className="text-sm muted">fans keep vs. a 2× markup</p></div>
+          <div><p className="font-display text-3xl tabular-nums">$0</p><p className="text-sm muted">scalper profit</p></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const COMPARE: [string, string, string][] = [
+  ["Resale price", "Whatever a scalper asks", "Capped at face value by the ticket"],
+  ["Who earns on resale", "Scalpers and resale sites", "The host, on every resale"],
+  ["Fake or copied tickets", "Screenshots and PDFs get resold", "A live code that changes every 10 s"],
+  ["Loyal fans", "Treated like everyone else", "Check-ins unlock presales and discounts"],
+  ["Fees", "Service fees added at checkout", "A network fee under a cent"],
+];
+
+function Comparison() {
+  return (
+    <div className="overflow-hidden rounded-[28px] border hairline">
+      <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] bg-[var(--panel)] text-sm">
+        <span className="p-4 sm:px-6" />
+        <span className="p-4 muted sm:px-6">The old way</span>
+        <span className="p-4 font-medium sm:px-6">FaceValue</span>
+      </div>
+      {COMPARE.map(([k, old, fv]) => (
+        <div key={k} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] border-t hairline text-[0.95rem]">
+          <span className="p-4 font-medium sm:px-6">{k}</span>
+          <span className="p-4 muted sm:px-6">{old}</span>
+          <span className="flex gap-2 p-4 sm:px-6"><span aria-hidden className="mt-2 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--good)" }} />{fv}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // A small black glyph before each feature title, like a figure label.
 function Glyph({ shape }: { shape: "circle" | "square" | "diamond" }) {
   const cls = "inline-block h-3.5 w-3.5 bg-[var(--fg)]";
@@ -107,6 +171,9 @@ const FEATURES: { shape: "circle" | "square" | "diamond"; title: string; text: s
   { shape: "circle", title: "Resale is capped inside the ticket", text: "Can't go? List it. Nobody can price it above what you paid, and the host earns a royalty on every resale. Try to scalp this one.", Demo: ScalpDemo },
   { shape: "square", title: "A gate code that can't be screenshotted", text: "Your code changes every 10 seconds, so a screenshot is dead in 20. Any phone camera checks it at the door.", Demo: GateCodeDemo, tint: true },
 ];
+
+
+const HERO_TICKET: TicketInfo = { title: "UBC Student Section", place: "Thunderbird Arena · Fri 8:00 PM", price: 50, seats: [["SEC", "A"], ["ROW", "4"], ["SEAT", "12"]], tone: "white", number: "0007" };
 
 type Props = { ready: boolean; onSignIn: (email?: string) => void; accounts: SavedAccount[]; onForget: (address: string) => void };
 
@@ -143,10 +210,22 @@ export default function Landing({ ready, onSignIn, accounts, onForget }: Props) 
         )}
       </section>
 
-      <section className="fade-up card relative mt-12 overflow-hidden !rounded-[28px]" style={{ animationDelay: "240ms" }}>
-        <HoloTicket />
-        <p className="spin-hint absolute bottom-4 left-5">Drag to spin · there&apos;s a back</p>
-        <p className="spin-hint absolute bottom-4 right-5 hidden sm:block">Ticket / UBC Student Section</p>
+      <section className="fade-up mx-auto mt-14 w-full max-w-[560px] py-6" style={{ animationDelay: "240ms" }} aria-label="A sample FaceValue ticket">
+        <HoloTicket ticket={HERO_TICKET} />
+      </section>
+
+      <section className="mt-24">
+        <Glyph shape="circle" />
+        <h3 className="font-display mt-4 max-w-2xl text-3xl sm:text-5xl">Resale that pays the people who make the event.</h3>
+        <p className="mt-4 max-w-2xl text-lg muted">On other sites a resold ticket earns money for a scalper. On FaceValue every resale happens at face value and pays the host a royalty. Try your own numbers.</p>
+        <div className="mt-10"><RoyaltyCalculator /></div>
+      </section>
+
+      <section className="mt-24">
+        <Glyph shape="square" />
+        <h3 className="font-display mt-4 max-w-2xl text-3xl sm:text-5xl">The future of ticketing is fair by default.</h3>
+        <p className="mt-4 max-w-2xl text-lg muted">The rules live in the ticket itself, not in a policy page someone has to enforce.</p>
+        <div className="mt-10"><Comparison /></div>
       </section>
 
       <section className="mt-24 space-y-20">
@@ -170,6 +249,7 @@ export default function Landing({ ready, onSignIn, accounts, onForget }: Props) 
           </div>
         ))}
       </section>
+
 
       <section className="mt-24 flex flex-col items-start justify-between gap-6 rounded-[28px] p-8 sm:flex-row sm:items-end sm:p-14" style={{ background: "var(--tint)" }}>
         <h3 className="font-display max-w-xl text-4xl sm:text-6xl">Your seat. Your price.</h3>

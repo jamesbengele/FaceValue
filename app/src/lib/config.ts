@@ -1,6 +1,9 @@
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
 export const PROGRAM_ID = "9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2";
 export const EVENT_ADDRESS = process.env.NEXT_PUBLIC_EVENT_ADDRESS || "";
+// Demo reset: events created before this moment (unix ms) are hidden, and so are their tickets.
+// Onchain events can't be deleted once they have sales, so this is how the app starts clean. Unset = show all.
+export const SHOW_EVENTS_SINCE = Number(process.env.NEXT_PUBLIC_SHOW_EVENTS_SINCE || 0);
 export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
 // Events priced in any other test token can't be bought with the drip, so the list hides them. Unset = show all.
 export const DEMO_MINT = process.env.NEXT_PUBLIC_DEMO_MINT || "";

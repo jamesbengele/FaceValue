@@ -129,3 +129,39 @@ button { touch-action: manipulation; min-height: 44px; }
 /* Header and tab bar: the page shows through, softly. */
 .header-glass { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); }
 .footer-mark { font-size: 22.6cqw; }
+
+/* A QR is always dark on white, like a printed code, in both themes. */
+.qr-card { background: #ffffff; }
+
+/* Status chips and quiet text links inside the app. */
+.chip { display: inline-flex; align-items: center; border-radius: 9999px; padding: 0.15rem 0.65rem; font-size: 0.8rem; font-weight: 500; background: var(--panel-2); color: var(--muted); }
+.chip-bad { background: var(--bad-bg); color: var(--bad); }
+.underline { text-underline-offset: 4px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+.underline:hover { text-decoration-color: currentColor; }
+.text-rose-200 { color: var(--bad); }
+[class*="bg-rose-500/"] { background: var(--bad-bg); }
+[class*="bg-zinc-500/"] { background: var(--panel-2); }
+
+/* Back of the ticket: the stub (with the barcode) is on the left, so text starts after it. */
+.spin-back-text { inset: 11% 7% 11% 32%; }
+.spin-back-text h4 { max-width: 100%; }
+.spin-back-text p { max-width: 100%; }
+
+/* ---- Calm motion ---- */
+/* Keep the scrollbar's space even on short pages, so switching tabs never shifts the layout sideways. */
+html { scrollbar-gutter: stable; }
+/* Tabs and event pages fade in; no movement, so nothing jumps. */
+.view-enter { animation: viewin 0.22s ease-out both; }
+@keyframes viewin { from { opacity: 0; } to { opacity: 1; } }
+/* Floating notices (toasts, errors) rise in gently; they sit above the page, so they never push it. */
+.notice-in { animation: noticein 0.25s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes noticein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Scalp demo: a short, soft nudge instead of a shake, and a gentler stamp. */
+.ticket-shake { animation: nudge 0.3s ease-out; }
+@keyframes nudge { 0% { transform: scale(1); } 40% { transform: scale(0.985); } 100% { transform: scale(1); } }
+@keyframes stamp { from { transform: rotate(-6deg) scale(1.15); opacity: 0; } to { transform: rotate(-6deg) scale(1); opacity: 1; } }
+/* Colors and backgrounds ease instead of snapping; layout properties are left alone. */
+a, button, input, select, textarea { transition-property: color, background-color, border-color, box-shadow, opacity; transition-duration: 0.15s; transition-timing-function: ease; }
+@media (prefers-reduced-motion: reduce) { .view-enter, .notice-in { animation: none; } }
+
+.spin-ticket { width: 100%; }

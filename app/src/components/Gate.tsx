@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { codeFromScan, verifyCodeAny } from "@/lib/gate";
 import { EXTRA_GATE_ORIGINS } from "@/lib/config";
-import { thunk } from "@/lib/sounds";
 import { btn, btn2, card, h2, input } from "./ui";
 
 type Props = {
@@ -22,7 +21,7 @@ export default function Gate({ program, pk, eventKey, busy, checkIn }: Props) {
   useEffect(() => { setCanScan("BarcodeDetector" in window); return () => stop.current(); }, []);
 
   async function verify(code: string) {
-    const fail = (t: string) => { thunk(); setResult({ ok: false, text: t }); };
+    const fail = (t: string) => setResult({ ok: false, text: t });
     setResult(null);
     if (!pk) return fail("Connect the organizer wallet first");
     const v = verifyCodeAny(codeFromScan(code), { now: Math.floor(Date.now() / 1000), origins: [window.location.origin, ...EXTRA_GATE_ORIGINS] });

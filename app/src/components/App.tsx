@@ -9,13 +9,12 @@ import { EventAcc, EventInfoAcc, FanPassAcc, PerksAcc, Row, TicketAcc, discountP
 import { groupByPrice } from "@/lib/market";
 import { simulateThenSend } from "@/lib/tx";
 import { NoTokenAccount, SimError, UiError, toUiError } from "@/lib/errors";
-import { DEMO_MINT, EVENT_ADDRESS, explorerTx } from "@/lib/config";
+import { DEMO_MINT, EVENT_ADDRESS, SHOW_EVENTS_SINCE, explorerTx } from "@/lib/config";
 import GateCode from "./GateCode";
 import { Icon, btn, btn2, card, h2, input, rows } from "./ui";
 import Gate from "./Gate";
 import Landing from "./Landing";
 import Footer, { LogoMark } from "./Footer";
-import { ding, thunk, soundOn, setSoundOn } from "@/lib/sounds";
 import { SavedAccount, useSavedAccounts } from "@/lib/savedAccounts";
 import { normalizeUsername, usernameError, usernameMessage } from "@/lib/usernames";
 import { encodeName, encodedTooLong, fmtStart, matchesQuery, parseName } from "@/lib/eventMeta";
@@ -42,8 +41,6 @@ type MenuProps = {
 };
 function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onSwitch, onForget }: MenuProps) {
   const [open, setOpen] = useState(false);
-  const [sound, setSound] = useState(true);
-  useEffect(() => { if (open) setSound(soundOn()); }, [open]);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -67,9 +64,6 @@ function AccountMenu({ pk, bal, email, username, others, onFunds, onSignOut, onS
           </div>
           <div className="my-1 border-t border-white/10" />
           <button role="menuitem" className={item} onClick={() => { onFunds(); setOpen(false); }}>Get test funds</button>
-          <button role="menuitem" className={`${item} flex items-center justify-between`} onClick={() => { const on = !sound; setSoundOn(on); setSound(on); if (on) ding(); }}>
-            Sounds<span className="text-sm text-zinc-400">{sound ? "On" : "Off"}</span>
-          </button>
           <div className="my-1 border-t border-white/10" />
           <div className="px-3 pb-1 pt-2 text-sm text-zinc-400">Accounts on this device</div>
           {others.map((a) => (
@@ -200,19 +194,48 @@ function PerkTags({ perks }: { perks?: PerksAcc }) {
 function EventRow({ ev, perks, active, onClick }: { ev: Row<EventAcc>; perks?: PerksAcc; active?: boolean; onClick: () => void }) {
   const m = parseName(ev.account.name);
   return (
-    <button className={`-mx-3 flex w-[calc(100%+1.5rem)] items-start justify-between gap-4 rounded-lg px-3 py-3.5 text-left transition hover:bg-white/[0.06] ${active ? "nav-active" : ""}`} onClick={onClick}>
-      <div className="min-w-0 space-y-0.5">
-        <div className="text-lg font-semibold">{m.name}</div>
-        <div className="text-base text-zinc-400">{fmtStart(m.startMs)}</div>
+    <button className={`-mx-3 flex w-[calc(100%+1.5rem)] items-start justify-between gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-[var(--panel-2)] ${active ? "!bg-[var(--bg)]" : ""}`} onClick={onClick}>
+      <div className="min-w-0 space-y-1">
+        <div className="font-medium">{m.name}</div>
+        <div className="text-sm muted">{fmtStart(m.startMs)}</div>
         <PerkTags perks={perks} />
-        {soldOut(ev) && <span className="mr-2 inline-block rounded-full bg-rose-500/20 px-3 py-0.5 text-base text-rose-200">Sold out</span>}
-        {isPast(ev) && <span className="inline-block rounded-full bg-zinc-500/20 px-3 py-0.5 text-base text-zinc-300">Ended</span>}
+        {(soldOut(ev) || isPast(ev)) && <div className="flex gap-2">{soldOut(ev) && <span className="chip chip-bad">Sold out</span>}{isPast(ev) && <span className="chip">Ended</span>}</div>}
       </div>
       <div className="shrink-0 text-right">
-        <div className="text-lg font-semibold tabular-nums">{usd(ev.account.facePrice)}</div>
-        <div className="text-base text-zinc-400 tabular-nums">{ev.account.sold} of {ev.account.maxSupply} sold</div>
+        <div className="font-medium tabular-nums">{usd(ev.account.facePrice)}</div>
+        <div className="text-sm muted tabular-nums">{ev.account.sold} of {ev.account.maxSupply} sold</div>
       </div>
     </button>
+  );
+}
+
+// The events grid: a date tile, the price, the name, and how full it is.
+function EventCard({ ev, perks, onOpen }: { ev: Row<EventAcc>; perks?: PerksAcc; onOpen: () => void }) {
+  const m = parseName(ev.account.name);
+  const d = m.startMs !== null ? new Date(m.startMs) : null;
+  const pct = ev.account.maxSupply ? Math.round((ev.account.sold / ev.account.maxSupply) * 100) : 0;
+  return (
+    <div className="card flex flex-col overflow-hidden !rounded-[20px] transition hover:shadow-[var(--shadow)]">
+      <button className="flex flex-1 flex-col p-5 text-left" onClick={onOpen}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-[3.25rem] rounded-xl bg-[var(--bg)] px-2.5 py-2 text-center leading-none">
+            <div className="text-[0.7rem] font-medium uppercase tracking-wide muted">{d ? d.toLocaleString(undefined, { month: "short" }) : "Date"}</div>
+            <div className="font-display mt-1 text-2xl">{d ? d.getDate() : "TBA"}</div>
+          </div>
+          <span className="rounded-full bg-[var(--bg)] px-3 py-1 text-sm font-medium tabular-nums">{usd(ev.account.facePrice)}</span>
+        </div>
+        <p className="mt-5 text-lg font-medium leading-snug">{m.name}</p>
+        <p className="mt-1 text-sm muted">{fmtStart(m.startMs)}</p>
+        <PerkTags perks={perks} />
+        <div className="mt-auto pt-6">
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--panel-2)]"><div className="h-full rounded-full bg-[var(--fg)]" style={{ width: `${pct}%` }} /></div>
+          <div className="mt-2 flex items-center justify-between text-sm">
+            <span className="muted tabular-nums">{ev.account.sold} of {ev.account.maxSupply} sold</span>
+            {soldOut(ev) ? <span className="chip chip-bad">Sold out</span> : isPast(ev) ? <span className="chip">Ended</span> : null}
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -346,11 +369,11 @@ export default function App() {
 
   // Soonest dated event first; undated ones last, newest first.
   const buyable = (e: Row<EventAcc>) => !DEMO_MINT || e.account.mint.toBase58() === DEMO_MINT;
-  const allEvents = useMemo(() => [...(events ?? [])].sort((a, b) => {
+  const allEvents = useMemo(() => [...(events ?? [])].filter((e) => !SHOW_EVENTS_SINCE || e.account.eventId.toNumber() >= SHOW_EVENTS_SINCE).sort((a, b) => {
     const sa = parseName(a.account.name).startMs, sb = parseName(b.account.name).startMs;
     return sa !== null && sb !== null ? sa - sb : sa !== null ? -1 : sb !== null ? 1 : b.account.eventId.cmp(a.account.eventId);
   }), [events]);
-  const byKey = (k: string) => events?.find((e) => e.publicKey.toBase58() === k);
+  const byKey = (k: string) => allEvents.find((e) => e.publicKey.toBase58() === k);
   const myEvents = useMemo(() => (pk ? allEvents.filter((e) => e.account.organizer.equals(pk)) : []), [allEvents, pk]);
   const ticketsOf = (e: Row<EventAcc>) =>
     tickets.filter((t) => t.account.event.equals(e.publicKey)).sort((a, b) => a.account.ticketId - b.account.ticketId);
@@ -426,14 +449,11 @@ export default function App() {
     setBusy(true); setErr(null); setToast(null); setErrFace(ev && usd(ev.account.facePrice));
     try {
       const sig = await simulateThenSend(connection, wallet, await build());
-      ding();
       setToast({ sig, text });
       await load();
       return true;
     } catch (e) {
-      const u = toUiError(e);
-      if (u.kind === "face") thunk(); // the price cap said no
-      setErr(u);
+      setErr(toUiError(e));
       return false;
     } finally { setBusy(false); }
   }
@@ -549,26 +569,29 @@ export default function App() {
 
   const shown = allEvents.filter((e) => buyable(e) && matchesQuery(e.account.name, query));
   const eventsView = !selEv ? (
-    <section className={`${card} space-y-4`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className={h2}>Events</h2>
-        <input type="search" className={`${input} sm:!w-64`} placeholder="Search" aria-label="Search events" value={query} onChange={(e) => setQuery(e.target.value)} />
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="font-display text-4xl">Events</h2>
+          <p className="mt-1 muted">Every ticket here resells at face value or less.</p>
+        </div>
+        <input type="search" className={`${input} !rounded-full sm:!w-72`} placeholder="Search events" aria-label="Search events" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
-      {events === null ? (!loadErr && <p className="text-zinc-400">Loading…</p>) : allEvents.length === 0 ? <p className="text-zinc-400">No events yet.</p> : shown.length === 0 ? (
-        <p className="text-zinc-400">No events match &ldquo;{query.trim()}&rdquo;. <button className="underline" onClick={() => setQuery("")}>Clear search</button></p>
+      {events === null ? (!loadErr && <p className="muted">Loading…</p>) : allEvents.length === 0 ? <p className="muted">No events yet.</p> : shown.length === 0 ? (
+        <p className="muted">No events match &ldquo;{query.trim()}&rdquo;. <button className="underline" onClick={() => setQuery("")}>Clear search</button></p>
       ) : (
-        <div className={rows}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((ev) => {
             const key = ev.publicKey.toBase58();
-            return <EventRow key={key} ev={ev} perks={perksOf(ev)} onClick={() => setSel(key)} />;
+            return <EventCard key={key} ev={ev} perks={perksOf(ev)} onOpen={() => setSel(key)} />;
           })}
         </div>
       )}
     </section>
   ) : (
     <>
-      <section className={`${card} space-y-5`}>
-        <button className="-ml-1 inline-flex items-center gap-1 text-base text-zinc-400 hover:text-inherit" onClick={() => setSel("")}><Icon name="back" className="h-4 w-4" />All events</button>
+      <button className="!min-h-0 -ml-1 inline-flex items-center gap-1 text-[0.95rem] muted transition hover:text-[var(--fg)]" onClick={() => setSel("")}><Icon name="back" className="h-4 w-4" />All events</button>
+      <section className="space-y-5">
         {(() => {
           const m = parseName(selEv.account.name);
           const perks = perksOf(selEv), n = attendedWith(selEv.account.organizer);
@@ -576,51 +599,75 @@ export default function App() {
           // Display only: the program computes the price it charges (floor of face * bps / 10_000 off).
           const fanPrice = perks && fan && perks.discountBps > 0 && !discountUsed ? face.sub(face.muln(perks.discountBps).divn(10_000)) : null;
           const presale = perks && presaleOpen(perks);
+          const info = infoOf(selEv);
+          const pct = selEv.account.maxSupply ? Math.round((selEv.account.sold / selEv.account.maxSupply) * 100) : 0;
           return (
-            <>
-              <div className="space-y-1">
-                <h2 className="text-2xl font-bold sm:text-3xl">{m.name}</h2>
-                <p className="text-base text-zinc-400">Created by {whoIs(selEv.account.organizer) ? <><span className="font-semibold text-inherit">{whoIs(selEv.account.organizer)}</span> <span className="font-mono text-sm">{short(selEv.account.organizer)}</span></> : <span className="font-mono text-sm">{short(selEv.account.organizer)}</span>}</p>
-                <p className="text-zinc-400">{fmtStart(m.startMs)} · {selEv.account.sold} of {selEv.account.maxSupply} sold</p>
-                {soldOut(selEv) && <span className="mr-2 inline-block rounded-full bg-rose-500/20 px-3 py-0.5 text-base text-rose-200">Sold out</span>}
-                {isPast(selEv) && <span className="inline-block rounded-full bg-zinc-500/20 px-3 py-0.5 text-base text-zinc-300">Ended</span>}
-              </div>
-              {(() => { const i = infoOf(selEv); return i && (
-                <div className="space-y-2">
-                  {/^https?:\/\//.test(i.imageUrl) && <img src={i.imageUrl} alt="" className="max-h-64 w-full rounded-xl object-cover" />}
-                  {i.venue && <div className="text-lg text-zinc-300">{i.venue}</div>}
-                  {i.description && <p className="whitespace-pre-line text-zinc-300">{i.description}</p>}
-                </div>
-              ); })()}
-              <button className="text-base text-zinc-400 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link to this event</button>
-              {perks && (presale || perks.discountBps > 0) ? (
-                <div className="space-y-2 rounded-lg border border-white/10 p-4">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-semibold">Fan perks</span>
-                    <span className="text-base text-zinc-400">Need {plural(perks.minAttended, "check-in")} with this host · you have {n}</span>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-start">
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {soldOut(selEv) && <span className="chip chip-bad">Sold out</span>}
+                    {isPast(selEv) && <span className="chip">Ended</span>}
+                    <span className="chip">{fmtStart(m.startMs)}</span>
                   </div>
-                  {presale && <p className="text-base"><span className="text-amber-300">Presale until {fmtTime(perks)}.</span> {fan ? "You can buy now." : "You can buy when it opens to everyone."}</p>}
-                  {perks.discountBps > 0 && (
-                    <p className="text-base"><span className="text-violet-300">{perks.discountBps / 100}% off one ticket.</span>{" "}
-                      {fanPrice ? `Your price is ${usd(fanPrice)}.` : fan ? "Already used for this event." : "Not unlocked yet."}</p>
-                  )}
+                  <h2 className="font-display text-4xl sm:text-5xl">{m.name}</h2>
+                  <p className="muted">Hosted by {whoIs(selEv.account.organizer) ? <span className="font-medium text-[var(--fg)]">@{whoIs(selEv.account.organizer)}</span> : <span className="font-mono text-sm">{short(selEv.account.organizer)}</span>}</p>
                 </div>
-              ) : n > 0 ? <p className="text-base text-zinc-400">You&apos;ve checked in at {plural(n, "event")} by this host.</p> : null}
-              {!soldOut(selEv) && !isPast(selEv) && (() => {
-                const max = Math.min(4, selEv.account.maxSupply - selEv.account.sold), n = Math.min(qty, max);
-                return (
-                  <label className="flex items-center gap-3 text-lg">Tickets
-                    <select className={input} style={{ width: "auto" }} value={n} onChange={(e) => setQty(Number(e.target.value))}>
-                      {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
-                    </select>
-                    <span className="text-zinc-400">Total {usd(face.muln(n))}{fanPrice ? " (discount applies to one ticket)" : ""}</span>
-                  </label>
-                );
-              })()}
-              <button className={btn} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv, Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold))}>
-                {soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : fanPrice && qty === 1 ? <>Buy ticket · <s className="opacity-60">{usd(face)}</s> {usd(fanPrice)}</> : qty > 1 ? <>Buy {qty} tickets</> : <>Buy ticket · {usd(face)}</>}
-              </button>
-            </>
+                {info && /^https?:\/\//.test(info.imageUrl) && <img src={info.imageUrl} alt="" className="max-h-80 w-full rounded-[20px] object-cover" />}
+                {info && (info.venue || info.description) && (
+                  <div className="space-y-2">
+                    {info.venue && <p className="text-lg font-medium">{info.venue}</p>}
+                    {info.description && <p className="whitespace-pre-line muted">{info.description}</p>}
+                  </div>
+                )}
+                {perks && (presale || perks.discountBps > 0) ? (
+                  <div className={`${card} space-y-2 !p-5`}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium">Fan perks</span>
+                      <span className="text-sm muted">Need {plural(perks.minAttended, "check-in")} with this host · you have {n}</span>
+                    </div>
+                    {presale && <p><span className="text-amber-300">Presale until {fmtTime(perks)}.</span> {fan ? "You can buy now." : "You can buy when it opens to everyone."}</p>}
+                    {perks.discountBps > 0 && (
+                      <p><span className="text-violet-300">{perks.discountBps / 100}% off one ticket.</span>{" "}
+                        {fanPrice ? `Your price is ${usd(fanPrice)}.` : fan ? "Already used for this event." : "Not unlocked yet."}</p>
+                    )}
+                  </div>
+                ) : n > 0 ? <p className="muted">You&apos;ve checked in at {plural(n, "event")} by this host.</p> : null}
+              </div>
+
+              <aside className={`${card} space-y-5 lg:sticky lg:top-24`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-display text-4xl tabular-nums">{fanPrice ? usd(fanPrice) : usd(face)}</p>
+                  <p className="text-sm muted">face value</p>
+                </div>
+                <div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--panel-2)]"><div className="h-full rounded-full bg-[var(--fg)]" style={{ width: `${pct}%` }} /></div>
+                  <p className="mt-2 text-sm muted">{selEv.account.sold} of {selEv.account.maxSupply} sold</p>
+                </div>
+                {!soldOut(selEv) && !isPast(selEv) && (() => {
+                  const max = Math.min(4, selEv.account.maxSupply - selEv.account.sold), q = Math.min(qty, max);
+                  return (
+                    <label className="flex items-center justify-between gap-3">
+                      <span className="muted">Tickets</span>
+                      <span className="flex items-center gap-3">
+                        <select className={`${input} !w-auto !rounded-full !py-1.5`} value={q} onChange={(e) => setQty(Number(e.target.value))}>
+                          {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                        </select>
+                        <span className="font-medium tabular-nums">{usd(face.muln(q))}</span>
+                      </span>
+                    </label>
+                  );
+                })()}
+                <button className={`${btn} w-full !py-3`} disabled={busy || soldOut(selEv) || isPast(selEv)} onClick={() => buyTicket(selEv, Math.min(qty, 4, selEv.account.maxSupply - selEv.account.sold))}>
+                  {soldOut(selEv) ? "Sold out" : isPast(selEv) ? "This event has ended" : fanPrice && qty === 1 ? <>Buy ticket · <s className="opacity-60">{usd(face)}</s> {usd(fanPrice)}</> : qty > 1 ? <>Buy {qty} tickets</> : <>Buy ticket</>}
+                </button>
+                {fanPrice && qty > 1 && <p className="text-sm muted">The fan discount applies to one ticket.</p>}
+                <div className="flex items-center justify-between border-t hairline pt-4 text-sm">
+                  <span className="muted">Resale capped at {usd(face)}</span>
+                  <button className="!min-h-0 underline" onClick={() => { try { void navigator.clipboard.writeText(`${location.origin}/?event=${selEv.publicKey.toBase58()}`); } catch {} }}>Copy link</button>
+                </div>
+              </aside>
+            </div>
           );
         })()}
       </section>
@@ -651,7 +698,7 @@ export default function App() {
                 </div>
               )}
               {ownCount > 0 && (
-                <p className="text-base text-zinc-400">You have {plural(ownCount, "ticket")} listed here. <button className="underline hover:text-inherit" onClick={() => { setView("tickets"); window.scrollTo(0, 0); }}>Manage in My tickets</button></p>
+                <p className="text-base text-zinc-400">You have {plural(ownCount, "ticket")} listed here. <button className="underline hover:text-inherit" onClick={() => goTab("tickets")}>Manage in My tickets</button></p>
               )}
             </>
           );
@@ -664,8 +711,11 @@ export default function App() {
   const myPasses = pk ? fanPasses.filter((f) => f.account.fan.equals(pk)) : [];
   const ticketsView = (
     <>
+      <div>
+        <h2 className="font-display text-4xl">My tickets</h2>
+        <p className="mt-1 muted">Show a live code at the door, or resell at face value.</p>
+      </div>
       <section className={`${card} space-y-5`}>
-        <h2 className={h2}>My tickets</h2>
         {pk && SHOW_GIFTING && <p className="break-all text-base text-zinc-400">Your wallet address (give it to friends so they can send you tickets): <code>{pk.toBase58()}</code></p>}
         {mine.length === 0 && <p className="text-zinc-400">No tickets yet.</p>}
         <div className="space-y-6 [&>*+*]:border-t [&>*+*]:border-white/10 [&>*+*]:pt-6">
@@ -777,6 +827,10 @@ export default function App() {
 
   const hostView = (
     <>
+      <div>
+        <h2 className="font-display text-4xl">Host an event</h2>
+        <p className="mt-1 muted">Set the face value once. Every resale stays at or under it.</p>
+      </div>
       <section className={`${card} space-y-5`}>
         <h2 className={h2}>Create an event</h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -820,9 +874,12 @@ export default function App() {
   // Events the signed-in wallet organizes: sales, buyer link, delete, tickets, check-in and the gate.
   const myEventsView = (
     <>
+      <div>
+        <h2 className="font-display text-4xl">My events</h2>
+        <p className="mt-1 muted">Sales, check-ins and resales for events you host.</p>
+      </div>
       <section className={`${card} space-y-3`}>
-        <h2 className={h2}>My events</h2>
-        {myEvents.length === 0 ? <p className="text-zinc-400">None yet. <button className="underline hover:text-inherit" onClick={() => { setView("host"); window.scrollTo(0, 0); }}>Host an event</button></p> : (
+        {myEvents.length === 0 ? <p className="text-zinc-400">None yet. <button className="underline hover:text-inherit" onClick={() => goTab("host")}>Host an event</button></p> : (
           <div className={rows}>
             {myEvents.map((ev) => <EventRow key={ev.publicKey.toBase58()} ev={ev} perks={perksOf(ev)} active={ev === hostEv} onClick={() => setHostSel(ev.publicKey.toBase58())} />)}
           </div>
@@ -843,18 +900,19 @@ export default function App() {
   );
 
   const appReady = !!pk && namesTried && !(namesLoaded && !names[pk.toBase58()]);
+  const goTab = (v: View) => { setView(v); if (v === "events") setSel(""); window.scrollTo({ top: 0 }); };
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-28 sm:px-6 md:pb-12">
       <header className="header-glass sticky top-0 z-30 -mx-4 flex h-16 items-center justify-between gap-3 border-b hairline px-4 sm:-mx-6 sm:px-6">
         <div className="flex min-w-0 items-center gap-8">
-          <a href="/" className="flex shrink-0 items-center gap-2.5" aria-label="FaceValue home"><LogoMark className="h-6 w-auto" /><h1 className="font-display text-xl">FaceValue</h1></a>
+          <a href="/" className="flex shrink-0 items-center gap-2.5" aria-label="FaceValue home" onClick={(e) => { e.preventDefault(); if (appReady) goTab("events"); else window.scrollTo({ top: 0, behavior: "smooth" }); }}><LogoMark className="h-6 w-auto" /><h1 className="font-display text-xl">FaceValue</h1></a>
           {appReady && (
             <nav aria-label="Sections" className="hidden items-center gap-1 md:flex">
               {NAV.map(([v, label]) => (
                 <button key={v} aria-current={view === v ? "page" : undefined}
-                  className={`!min-h-0 rounded-full px-3.5 py-1.5 text-[0.95rem] transition ${view === v ? "nav-active font-medium" : "muted hover:text-[var(--fg)]"}`}
-                  onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
+                  className={`!min-h-0 rounded-full px-3.5 py-1.5 text-[0.95rem] transition-colors ${view === v ? "nav-active" : "muted hover:text-[var(--fg)]"}`}
+                  onClick={() => goTab(v)}>{label}</button>
               ))}
             </nav>
           )}
@@ -894,31 +952,31 @@ export default function App() {
           <nav aria-label="Sections" className="header-glass fixed inset-x-0 bottom-0 z-20 flex border-t hairline pb-[env(safe-area-inset-bottom)] md:hidden">
             {NAV.map(([v, label]) => (
               <button key={v} aria-current={view === v ? "page" : undefined}
-                className={`min-h-[56px] flex-1 text-sm transition ${view === v ? "font-semibold text-[var(--fg)]" : "muted"}`}
-                onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
+                className={`min-h-[56px] flex-1 text-sm font-medium transition-colors ${view === v ? "text-[var(--fg)]" : "muted"}`}
+                onClick={() => goTab(v)}>{label}</button>
             ))}
           </nav>
           <div className="min-w-0 space-y-6">
             {loadErr && <ErrorBox e={{ kind: "other", msg: loadErr }} title="Couldn't load events" />}
-            {err && <ErrorBox e={err} face={errFace} onClose={() => setErr(null)} />}
-            {view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}
+            <div key={`${view}:${sel}`} className="view-enter space-y-6">{view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}</div>
           </div>
         </div>
       )}
 
-      <Footer />
+      <Footer onTab={appReady ? goTab : undefined} />
 
       {/* Short-lived notices: bottom right on desktop, above the tab bar on phones. */}
-      <div className="pointer-events-none fixed inset-x-4 bottom-20 z-20 flex flex-col items-center gap-2 md:inset-x-auto md:bottom-6 md:right-6 md:items-end">
+      <div className="pointer-events-none fixed inset-x-4 bottom-20 z-40 flex flex-col items-center gap-2 md:inset-x-auto md:bottom-6 md:right-6 md:items-end">
+        {err && <div className="notice-in pointer-events-auto w-full max-w-md shadow-[var(--shadow)]"><ErrorBox e={err} face={errFace} onClose={() => setErr(null)} /></div>}
         {toast && (
-          <div role="status" className="surface pointer-events-auto flex items-center gap-4 rounded-lg border border-white/10 px-4 py-3 text-base shadow-xl">
+          <div role="status" className="surface notice-in pointer-events-auto flex items-center gap-4 rounded-2xl border border-white/10 px-4 py-3 text-base shadow-[var(--shadow)]">
             <span>{toast.text}.</span>
             <a className="text-zinc-400 underline hover:text-inherit" href={explorerTx(toast.sig)} target="_blank" rel="noreferrer">View transaction</a>
             <button className="text-zinc-400 hover:text-inherit" aria-label="Dismiss" onClick={() => setToast(null)}><Icon name="x" className="h-4 w-4" /></button>
           </div>
         )}
         {fundMsg && (
-          <div role="status" className="surface pointer-events-auto rounded-lg border border-white/10 px-4 py-3 text-base shadow-xl">{fundMsg}</div>
+          <div role="status" className="surface notice-in pointer-events-auto rounded-2xl border border-white/10 px-4 py-3 text-base shadow-[var(--shadow)]">{fundMsg}</div>
         )}
       </div>
     </main>
