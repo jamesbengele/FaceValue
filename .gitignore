@@ -8,3 +8,6 @@ test-ledger/
 .data/
 docs/DEMO.md
 docs/PITCH.md
+# Private: demo video script and local tool files (never published)
+docs/VIDEO-SCRIPT.md
+.claude/
