@@ -8,12 +8,16 @@ export interface UsernameStore {
   get(addresses: string[]): Promise<Record<string, string>>;
   /** Saves `name` for `address`; returns false if another address already has that name. */
   set(address: string, name: string): Promise<boolean>;
+  /** Privy account id -> name, so the name follows the email account even if its wallet changes. */
+  getByPrivy(privyId: string): Promise<string | null>;
+  setByPrivy(privyId: string, name: string): Promise<void>;
 }
 
 const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const BY_ADDR = "fv:username:by-address";
 const BY_NAME = "fv:username:by-name";
+const BY_PRIVY = "fv:username:by-privy";
 
 function redisStore(url: string, token: string): UsernameStore {
   const cmd = async (...args: string[]): Promise<any> => {
@@ -36,11 +40,14 @@ function redisStore(url: string, token: string): UsernameStore {
       if (old && old !== name) await cmd("HDEL", BY_NAME, old);
       return true;
     },
+    getByPrivy: async (id) => (await cmd("HGET", BY_PRIVY, id)) ?? null,
+    setByPrivy: async (id, name) => { await cmd("HSET", BY_PRIVY, id, name); },
   };
 }
 
 function fileStore(file: string): UsernameStore {
   const read = (): Record<string, string> => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return {}; } };
+  const PV = "privy:"; // privy ids live in the same file under a prefix; real addresses never start with it
   return {
     async get(addresses) {
       const all = read();
@@ -48,11 +55,17 @@ function fileStore(file: string): UsernameStore {
     },
     async set(address, name) {
       const all = read();
-      if (Object.entries(all).some(([a, n]) => n === name && a !== address)) return false;
+      if (Object.entries(all).some(([a, n]) => n === name && a !== address && !a.startsWith(PV))) return false;
       all[address] = name;
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, JSON.stringify(all, null, 2));
       return true;
+    },
+    async getByPrivy(id) { return read()[PV + id] ?? null; },
+    async setByPrivy(id, name) {
+      const all = read(); all[PV + id] = name;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(all, null, 2));
     },
   };
 }
