@@ -1,11 +1,11 @@
 // Shared look. One filled button per screen (`btn`, the main action); everything else is `btn2` or plain text.
-export const btn = "btn-primary rounded-[4px] px-4 py-2.5 text-base font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
-export const btn2 = "btn-outline rounded-[4px] px-4 py-2.5 text-base font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
-export const card = "boxed p-5 sm:p-6";
-export const input = "w-full rounded-[4px] border-[1.5px] border-[var(--ink-line)] bg-[var(--field)] px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-[var(--accent)]";
-export const h2 = "text-xl font-semibold";
+export const btn = "btn-primary inline-flex items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-base font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
+export const btn2 = "btn-secondary inline-flex items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-base font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
+export const card = "card p-5 sm:p-7";
+export const input = "w-full rounded-xl border border-[var(--hair)] bg-[var(--field)] px-3.5 py-2.5 text-base outline-none transition focus:border-[var(--fg)]";
+export const h2 = "font-display text-2xl";
 // Rows separated by thin lines, no line above the first.
-export const rows = "[&>*+*]:border-t [&>*+*]:border-white/10";
+export const rows = "[&>*+*]:border-t [&>*+*]:border-[var(--hair)]";
 
 const PATHS = {
   sun: "M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z",

@@ -26,7 +26,7 @@ function ThemeToggle() {
   useEffect(() => setTheme(document.documentElement.dataset.theme ?? "dark"), []);
   const next = theme === "dark" ? "light" : "dark";
   return (
-    <button className="rounded-lg p-2.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-inherit" aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
+    <button className="rounded-full p-2.5 muted transition hover:bg-[var(--panel)] hover:text-[var(--fg)]" aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
       onClick={() => { document.documentElement.dataset.theme = next; setTheme(next); try { localStorage.setItem("theme", next); } catch {} }}>
       <Icon name={theme === "dark" ? "sun" : "moon"} />
     </button>
@@ -857,13 +857,32 @@ export default function App() {
     </>
   );
 
+  const appReady = !!pk && namesTried && !(namesLoaded && !names[pk.toBase58()]);
+
   return (
-    <main className="mx-auto max-w-5xl px-4 pb-28 pt-4 sm:px-6 md:pb-12 md:pt-6">
-      <header className="boxed flex items-center justify-between gap-3 py-2 pl-3 pr-2 sm:pl-4">
-        <a href="/" className="flex items-center gap-2.5" aria-label="FaceValue home"><LogoMark className="h-7 w-auto" /><h1 className="font-display text-2xl">FaceValue</h1></a>
-        <div className="flex items-center gap-2">
-          {pk && bal !== null && bal !== "error" && bal.usd && <span className="hidden text-base text-zinc-400 tabular-nums sm:inline">{bal.usd}</span>}
+    <main className="mx-auto max-w-5xl px-4 pb-28 sm:px-6 md:pb-12">
+      <header className="header-glass sticky top-0 z-30 -mx-4 flex h-16 items-center justify-between gap-3 border-b hairline px-4 sm:-mx-6 sm:px-6">
+        <div className="flex min-w-0 items-center gap-8">
+          <a href="/" className="flex shrink-0 items-center gap-2.5" aria-label="FaceValue home"><LogoMark className="h-6 w-auto" /><h1 className="font-display text-xl">FaceValue</h1></a>
+          {appReady && (
+            <nav aria-label="Sections" className="hidden items-center gap-1 md:flex">
+              {NAV.map(([v, label]) => (
+                <button key={v} aria-current={view === v ? "page" : undefined}
+                  className={`!min-h-0 rounded-full px-3.5 py-1.5 text-[0.95rem] transition ${view === v ? "nav-active font-medium" : "muted hover:text-[var(--fg)]"}`}
+                  onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
+              ))}
+            </nav>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {pk && bal !== null && bal !== "error" && bal.usd && <span className="mr-1 hidden text-[0.95rem] muted tabular-nums sm:inline">{bal.usd}</span>}
           <ThemeToggle />
+          {!pk && (
+            <>
+              <button className="hidden rounded-full px-3 text-[0.95rem] muted transition hover:text-[var(--fg)] sm:inline-flex sm:items-center" disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Sign in</button>
+              <button className={`${btn} !py-2 !text-[0.95rem]`} disabled={!wallet.emailAuth?.ready} onClick={() => wallet.emailAuth?.login()}>Get tickets</button>
+            </>
+          )}
           {pk && <AccountMenu pk={pk} bal={bal} email={myEmail} username={myName} others={saved.accounts.filter((a) => a.address !== pk.toBase58())}
             onFunds={getFunds} onSignOut={() => wallet.emailAuth?.logout()} onSwitch={(e) => wallet.emailAuth?.switchTo(e)} onForget={saved.forget} />}
         </div>
@@ -885,16 +904,16 @@ export default function App() {
           {nameMsg && <p className="text-base text-red-300">{nameMsg}</p>}
         </section>
       ) : (
-        <div className="mt-6 flex flex-col gap-6 md:flex-row md:gap-8">
-          {/* Phone: fixed bottom tab bar. md and up: left sidebar. */}
-          <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-white/10 bg-[#0b0a12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:w-44 md:shrink-0 md:flex-col md:gap-1 md:self-start md:border-0 md:bg-transparent md:pb-0">
+        <div className="mt-8">
+          {/* Phones: a bottom tab bar. Wider screens use the tabs in the header. */}
+          <nav aria-label="Sections" className="header-glass fixed inset-x-0 bottom-0 z-20 flex border-t hairline pb-[env(safe-area-inset-bottom)] md:hidden">
             {NAV.map(([v, label]) => (
               <button key={v} aria-current={view === v ? "page" : undefined}
-                className={`min-h-[52px] flex-1 text-base transition md:min-h-0 md:flex-none md:rounded-lg md:px-3 md:py-2.5 md:text-left ${view === v ? "nav-active font-semibold" : "text-zinc-400 hover:text-inherit"}`}
+                className={`min-h-[56px] flex-1 text-sm transition ${view === v ? "font-semibold text-[var(--fg)]" : "muted"}`}
                 onClick={() => { setView(v); if (v === "events") setSel(""); window.scrollTo(0, 0); }}>{label}</button>
             ))}
           </nav>
-          <div className="min-w-0 flex-1 space-y-5">
+          <div className="min-w-0 space-y-6">
             {loadErr && <ErrorBox e={{ kind: "other", msg: loadErr }} title="Couldn't load events" />}
             {err && <ErrorBox e={err} face={errFace} onClose={() => setErr(null)} />}
             {view === "events" ? eventsView : view === "tickets" ? ticketsView : view === "mine" ? myEventsView : hostView}
