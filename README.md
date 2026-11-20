@@ -1,6 +1,6 @@
 # FaceValue (UBC build)
 
-**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: https://facevalue-blush.vercel.app/. Demo video/GIF: _to be added._ Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
+**Student tickets that can't be resold above face value, enforced by the Solana program itself.** Live app: https://facevalue-blush.vercel.app/. Demo video: https://www.youtube.com/watch?v=v2AB8zUp7g4. Program on Explorer: [9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2](https://explorer.solana.com/address/9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2?cluster=devnet) (devnet).
 
 The spec was carried over from an earlier practice build; all code in this repo was written during the hackathon. Spec: [SPEC.md](SPEC.md). Prompt log: [PROMPTS.md](PROMPTS.md).
 
